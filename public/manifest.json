@@ -2,7 +2,7 @@
   "name": "AI 朋友 - 你的数字伙伴",
   "short_name": "AI 朋友",
   "description": "具有记忆和情绪的 AI 聊天伙伴",
-  "start_url": "/",
+  "start_url": "/ai-friend/",
   "display": "standalone",
   "background_color": "#09090b",
   "theme_color": "#09090b",

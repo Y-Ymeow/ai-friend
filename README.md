@@ -39,11 +39,11 @@
    ```
 2. 安装依赖
    ```bash
-   npm install
+   bun install
    ```
 3. 启动开发服务器
    ```bash
-   npm run dev
+   bun run dev
    ```
 4. 打开浏览器访问 `http://localhost:5173`，在**设置**中填入你的 API Key。
 

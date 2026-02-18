@@ -2,6 +2,7 @@
 
 ## 核心架构
 - **前端框架**: Preact + Vite
+- **包管理器**: Bun (首选，执行速度更快)
 - **状态管理**: `@preact/signals` (见 `src/store.ts`)
 - **数据库**: `sql.js` (SQLite WASM) + IndexedDB 持久化 (见 `src/db/db.ts`)
 - **UI 组件**: Tailwind CSS (通过 `src/ui/lib/utils.ts` 辅助)

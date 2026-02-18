@@ -1,7 +1,7 @@
 import { signal } from "@preact/signals"
 
 // 简单路由状态
-export type Page = 'home' | 'chat' | 'settings'
+export type Page = 'home' | 'chat' | 'settings' | 'friend-detail'
 
 export const currentPage = signal<Page>('home')
 export const routeParams = signal<Record<string, string>>({})

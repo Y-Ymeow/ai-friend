@@ -38,7 +38,6 @@ let autoReplyTimer: ReturnType<typeof setInterval> | null = null;
 export function refreshFriends() {
   const all = getFriends();
   const now = new Date();
-  let changed = false;
 
   const updated = all.map((f) => {
     const last = new Date(f.lastStateUpdate);

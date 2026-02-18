@@ -125,11 +125,10 @@ export const ChatArea: FunctionalComponent<Props> = ({
             <div class="text-center"><div class="text-4xl mb-2">💬</div><p>选择一个会话开始聊天</p></div>
           </div>
         ) : (
-          messages.map((msg, idx) => {
+          messages.map((msg) => {
             const isUser = msg.senderId === 'user'
             const friend = friends.find(f => f.id === msg.senderId)
             const isTyping = generatingIds.has(msg.senderId)
-            const isLastUser = isUser && (idx === messages.length - 1 || (idx === messages.length - 2 && !isUser))
 
             return (
               <div key={msg.id} class={cn("flex gap-2 group", isUser && "flex-row-reverse")}>

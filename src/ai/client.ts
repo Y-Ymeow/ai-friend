@@ -7,7 +7,7 @@ import {
   updateConversationLastMessage,
   getMemories,
 } from "../db/db";
-import type { Message, Friend, Memory } from "../types";
+import type { Message, Friend } from "../types";
 
 // === 状态 ===
 export const isGenerating = signal(false);
@@ -126,8 +126,6 @@ async function generateReply(
       });
     } catch (err: any) {
       lastError = err;
-      // 如果是 429 或者网络错误，进行重试
-      const isRateLimit = err.message?.includes("429");
       if (i < maxRetries - 1) {
         // 指数退避：1s, 2s, 4s, 8s...
         const waitTime = Math.pow(2, i) * 1000;

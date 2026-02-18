@@ -1,0 +1,205 @@
+import { type FunctionalComponent } from "preact"
+import { useState, useRef, useEffect } from "preact/hooks"
+import { Button } from "../components/button"
+import { cn } from "../lib/utils"
+import { compressImage } from "../../lib/image"
+import type { Message, Friend, Conversation } from "../../types"
+
+interface Props {
+  conversation: Conversation | null
+  messages: Message[]
+  friends: Friend[]
+  generatingIds: Set<string>
+  isWaiting?: boolean
+  onSend: (content: string, images: string[]) => void
+  onTyping?: () => void
+  onShowDetail?: (friendId: string) => void
+  onLoadMore?: (limit: number, offset: number) => void
+  onRetry?: () => void
+  disabled?: boolean
+  onOpenSidebar: () => void
+}
+
+export const ChatArea: FunctionalComponent<Props> = ({
+  conversation, messages, friends, generatingIds, isWaiting, onSend, onTyping, onShowDetail, onLoadMore, onRetry, disabled, onOpenSidebar
+}) => {
+  const [text, setText] = useState("")
+  const [images, setImages] = useState<string[]>([])
+  const [offset, setOffset] = useState(0)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    setOffset(0)
+  }, [conversation?.id])
+
+  useEffect(() => {
+    if (offset === 0) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [messages.length])
+
+  const adjustTextareaHeight = () => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    const lineHeight = 20
+    const maxLines = 5
+    const maxHeight = lineHeight * maxLines
+    ta.style.height = Math.min(ta.scrollHeight, maxHeight) + 'px'
+  }
+
+  useEffect(() => {
+    adjustTextareaHeight()
+  }, [text])
+
+  const handleSend = () => {
+    if ((!text.trim() && images.length === 0) || disabled) return
+    onSend(text.trim(), images)
+    setText("")
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+  }
+
+  const handleKey = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handleFiles = async (e: Event) => {
+    const files = (e.target as HTMLInputElement).files
+    if (!files) return
+    const fileArr = Array.from(files).slice(0, 4 - images.length)
+    for (const file of fileArr) {
+      const result = await compressImage(file)
+      setImages(prev => [...prev, result.base64])
+    }
+    ;(e.target as HTMLInputElement).value = ''
+  }
+
+  const handleLoadMore = () => {
+    const nextOffset = offset + 20
+    setOffset(nextOffset)
+    if (onLoadMore) onLoadMore(20, nextOffset)
+  }
+
+  const getTitle = (): string => {
+    if (!conversation) return 'AI 朋友'
+    if (conversation.name) return conversation.name
+    if (conversation.type === 'private') {
+      return friends.find(f => f.id === conversation.friendIds[0])?.name || '聊天'
+    }
+    return `群聊 (${conversation.friendIds.length}人)`
+  }
+
+  const handleTitleClick = () => {
+    if (conversation?.type === 'private' && onShowDetail) {
+      onShowDetail(conversation.friendIds[0])
+    }
+  }
+
+  return (
+    <div class="h-full flex flex-col bg-background">
+      <header class="flex-shrink-0 h-12 px-3 flex items-center gap-2 border-b border-border">
+        <button class="lg:hidden text-xl text-muted hover:text-white" onClick={onOpenSidebar}>☰</button>
+        <h1 
+          class={cn("font-semibold truncate", conversation?.type === 'private' && "cursor-pointer hover:text-accent")} 
+          onClick={handleTitleClick}
+        >
+          {getTitle()}
+        </h1>
+      </header>
+
+      <div class="flex-1 overflow-auto p-4 space-y-3">
+        {conversation && messages.length >= 20 && (
+          <div class="text-center py-2">
+            <button onClick={handleLoadMore} class="text-xs text-accent hover:underline">查看更多历史消息</button>
+          </div>
+        )}
+
+        {!conversation ? (
+          <div class="h-full flex items-center justify-center text-muted">
+            <div class="text-center"><div class="text-4xl mb-2">💬</div><p>选择一个会话开始聊天</p></div>
+          </div>
+        ) : (
+          messages.map((msg, idx) => {
+            const isUser = msg.senderId === 'user'
+            const friend = friends.find(f => f.id === msg.senderId)
+            const isTyping = generatingIds.has(msg.senderId)
+            const isLastUser = isUser && (idx === messages.length - 1 || (idx === messages.length - 2 && !isUser))
+
+            return (
+              <div key={msg.id} class={cn("flex gap-2 group", isUser && "flex-row-reverse")}>
+                <div class={cn("w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm", isUser ? "bg-accent text-white" : "bg-surface-hover")}>
+                  {isUser ? '我' : (friend?.name || '友').charAt(0)}
+                </div>
+                <div class={cn("max-w-[75%] rounded-2xl px-3 py-2 relative", isUser ? "bg-accent text-white rounded-tr-sm" : "bg-surface-hover rounded-tl-sm")}>
+                  {!isUser && (
+                    <div class="text-xs text-muted mb-1 flex items-center gap-2">
+                      {friend?.name || msg.senderName}
+                      {isTyping && <span class="text-accent animate-pulse">输入中...</span>}
+                    </div>
+                  )}
+                  {msg.images && msg.images.length > 0 && (
+                    <div class="flex flex-wrap gap-1 mb-1">
+                      {msg.images.map((img, i) => (
+                        <img key={i} src={img} class="max-w-[120px] max-h-[120px] rounded cursor-pointer" onClick={() => setPreviewIndex(i)} />
+                      ))}
+                    </div>
+                  )}
+                  {msg.content && <p class="text-sm whitespace-pre-wrap">{msg.content}</p>}
+                  
+                  {isUser && onRetry && (
+                    <button 
+                      onClick={onRetry} 
+                      class="absolute -left-10 top-1/2 -translate-y-1/2 p-2 text-muted opacity-0 group-hover:opacity-100 hover:text-accent transition-all text-lg"
+                      title="重试 AI 响应"
+                    >
+                      🔄
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
+        
+        {generatingIds.size > 0 && (
+          <div class="text-center text-muted text-sm italic">
+            {[...generatingIds].map(id => friends.find(f => f.id === id)?.name).filter(Boolean).join('、')} 正在回复...
+          </div>
+        )}
+        {isWaiting && <div class="text-center text-muted text-sm italic">等待更多输入... (3秒后回复)</div>}
+        <div ref={bottomRef} />
+      </div>
+
+      <div class="flex-shrink-0 p-3 border-t border-border flex gap-2 items-end">
+        <input ref={fileRef} type="file" accept="image/*" multiple class="hidden" onChange={handleFiles} />
+        <Button variant="outline" size="icon" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>🖼</Button>
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onInput={e => {
+            setText((e.target as HTMLTextAreaElement).value)
+            if (onTyping) onTyping()
+          }}
+          onKeyDown={handleKey}
+          placeholder="输入消息..."
+          rows={1}
+          class="flex-1 px-3 py-2 rounded-2xl border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-accent resize-none overflow-hidden leading-5"
+          style={{ maxHeight: '100px' }}
+        />
+        <Button onClick={handleSend} disabled={!text.trim() && images.length === 0}>发送</Button>
+      </div>
+
+      {previewIndex !== null && (
+        <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setPreviewIndex(null)}>
+          <img src={messages.flatMap(m => m.images || [])[previewIndex]} class="max-w-full max-h-full" />
+        </div>
+      )}
+    </div>
+  )
+}

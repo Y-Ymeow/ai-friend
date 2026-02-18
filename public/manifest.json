@@ -1,0 +1,17 @@
+{
+  "name": "AI 朋友 - 你的数字伙伴",
+  "short_name": "AI 朋友",
+  "description": "具有记忆和情绪的 AI 聊天伙伴",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

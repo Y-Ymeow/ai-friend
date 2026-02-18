@@ -47,7 +47,6 @@ export function refreshFriends() {
       last.getDate() !== now.getDate()
     ) {
       console.log(`[Store] 检测到新的一天，刷新 ${f.name} 的状态...`);
-      changed = true;
       const newMood = Math.max(
         0,
         Math.min(100, f.mood + (Math.random() * 40 - 20)),
@@ -305,7 +304,7 @@ export function startAppServices() {
 
         const lastMsgs = getMessages(conv.id, 1);
         const lastMsg = lastMsgs[0];
-        
+
         // 基准时间：如果有消息则用最后一条消息时间，否则用会话创建时间
         const baseTime = lastMsg ? lastMsg.timestamp : conv.createdAt;
         const diffMinutes = (Date.now() - baseTime) / (1000 * 60);
@@ -313,12 +312,14 @@ export function startAppServices() {
         if (diffMinutes >= friend.autoReply.idleMinutes) {
           // 只有最后一条消息【不是用户发的】，AI 才主动跟进（避免打断用户刚发的还没回的消息）
           // 或者压根没有消息时
-          if (!lastMsg || lastMsg.senderId !== 'user') {
-            console.log(`[Store] 距离最后一条消息已过 ${Math.floor(diffMinutes)} 分钟，${friend.name} 发起跟进...`);
-            
+          if (!lastMsg || lastMsg.senderId !== "user") {
+            console.log(
+              `[Store] 距离最后一条消息已过 ${Math.floor(diffMinutes)} 分钟，${friend.name} 发起跟进...`,
+            );
+
             // 更新会话时间，防止在一分钟后的下次轮询中再次触发
             updateConversationLastMessage(conv.id, conv.lastMessage || "");
-            
+
             await generateReplies(
               conv.id,
               [friend.id],
@@ -328,10 +329,13 @@ export function startAppServices() {
                 refreshMessages();
                 refreshConversations();
                 // TODO: 发送系统通知
-                if ("Notification" in window && Notification.permission === "granted") {
+                if (
+                  "Notification" in window &&
+                  Notification.permission === "granted"
+                ) {
                   new Notification(`${friend.name}`, { body: msg.content });
                 }
-              }
+              },
             );
           }
         }
@@ -347,11 +351,13 @@ export async function retryAIResponse(): Promise<string[]> {
   if (!conv) return ["会话不存在"];
 
   // 1. 找到最后一条用户消息
-  const lastUserMsg = [...messages.value].reverse().find(m => m.senderId === 'user');
+  const lastUserMsg = [...messages.value]
+    .reverse()
+    .find((m) => m.senderId === "user");
   if (!lastUserMsg) return ["未找到可重试的消息"];
 
   console.log(`[Store] 手动重试消息: "${lastUserMsg.content}"`);
-  
+
   // 2. 停止当前计时器并清除挂起的内容
   if (sendTimer) {
     clearTimeout(sendTimer);
@@ -363,10 +369,16 @@ export async function retryAIResponse(): Promise<string[]> {
 
   // 3. 立即触发 AI 生成
   try {
-    await generateReplies(convId, conv.friendIds, lastUserMsg.content, lastUserMsg.images || [], () => {
-      refreshMessages();
-      refreshConversations();
-    });
+    await generateReplies(
+      convId,
+      conv.friendIds,
+      lastUserMsg.content,
+      lastUserMsg.images || [],
+      () => {
+        refreshMessages();
+        refreshConversations();
+      },
+    );
     return [];
   } catch (err: any) {
     return [err.message || "重试失败"];

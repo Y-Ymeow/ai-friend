@@ -6,6 +6,7 @@ import {
   createMessage,
   updateConversationLastMessage,
   getMemories,
+  updateFriendStats,
 } from "../db/db";
 import type { Message, Friend } from "../types";
 
@@ -29,7 +30,7 @@ function buildSystemPrompt(friend: Friend): string {
     ? `\n长期记忆：\n${memories.map(m => `- ${m.content}`).join('\n')}`
     : "";
 
-  return `你是${friend.name}，一个真实的朋友。
+  return `你是${friend.name}，一个真实的朋友。你正在和用户聊天。
 当前时间：${now}
 
 你的当前状态：
@@ -41,43 +42,75 @@ function buildSystemPrompt(friend: Friend): string {
 
 性格：${friend.personality}
 
-要求：
-1. 像真正的朋友一样聊天，自然、随意，1-3句话即可。
-2. 可以用表情，结合当前心情。不要提及你是 AI。
-3. 结合外观、打扮或身体状况进行适当互动。`;
+【重要规则】
+1. 直接回复用户的话，不要写"我：xxx"或"用户：xxx"这样的格式
+2. 像真正的朋友一样聊天，自然、随意，1-3句话即可
+3. 可以用表情，结合当前心情
+4. 不要提及你是AI，不要写任何对话格式标记
+5. 只输出你想要说的话，不要模拟对话场景`;
 }
 
-function buildContext(conversationId: string): string {
-  // 获取较多的历史记录，然后进行长度截断
-  const allRecentMessages = getMessages(conversationId, 50); 
-  if (allRecentMessages.length === 0) return "";
+interface ChatMessage {
+  role: "user" | "assistant";
+  name?: string;
+  content: string;
+}
 
-  const MAX_CONTEXT_CHARS = 10000; // 安全上限
-  let contextParts: string[] = [];
+function buildMessages(conversationId: string, currentUserMessage: string): ChatMessage[] {
+  const allRecentMessages = getMessages(conversationId, 50);
+  const messages: ChatMessage[] = [];
+  
+  const MAX_CONTEXT_CHARS = 8000;
   let currentLength = 0;
+  const contextMessages: ChatMessage[] = [];
 
-  // 从最新的消息开始往前凑，直到达到长度限制
   for (let i = allRecentMessages.length - 1; i >= 0; i--) {
     const msg = allRecentMessages[i];
-    const line = msg.senderId === "user" ? `我：${msg.content}\n` : `${msg.senderName}：${msg.content}\n`;
+    const chatMsg: ChatMessage = msg.senderId === "user"
+      ? { role: "user", content: msg.content }
+      : { role: "assistant", name: msg.senderName, content: msg.content };
     
-    if (currentLength + line.length > MAX_CONTEXT_CHARS) break;
+    const msgLength = JSON.stringify(chatMsg).length;
+    if (currentLength + msgLength > MAX_CONTEXT_CHARS) break;
     
-    contextParts.unshift(line); // 插到前面，保持时间顺序
-    currentLength += line.length;
+    contextMessages.unshift(chatMsg);
+    currentLength += msgLength;
   }
 
-  return "【最近对话】\n" + contextParts.join("");
+  messages.push(...contextMessages);
+  messages.push({ role: "user", content: currentUserMessage });
+  
+  return messages;
+}
+
+interface ZhipuResponse {
+  choices: Array<{
+    message: {
+      content: string | null;
+      reasoning_content?: string;
+    };
+    finish_reason: string;
+  }>;
 }
 
 async function callZhipuVision(
   systemPrompt: string,
-  userMessage: string,
+  messages: ChatMessage[],
   images: string[],
   config: { apiKey: string; model: string }
 ): Promise<string> {
-  const content: any[] = [{ type: "text", text: userMessage }];
+  const lastMsg = messages[messages.length - 1];
+  const content: any[] = [{ type: "text", text: lastMsg.content }];
   for (const img of images) content.push({ type: "image_url", image_url: { url: img } });
+
+  const apiMessages: any[] = [
+    { role: "system", content: systemPrompt },
+    ...messages.slice(0, -1).map(m => m.name 
+      ? { role: m.role, name: m.name, content: m.content }
+      : { role: m.role, content: m.content }
+    ),
+    { role: "user", content }
+  ];
 
   const response = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
     method: "POST",
@@ -87,18 +120,27 @@ async function callZhipuVision(
     },
     body: JSON.stringify({
       model: config.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content }
-      ],
+      messages: apiMessages,
       max_tokens: 256,
       temperature: 0.85
     })
   });
 
   if (!response.ok) throw new Error(`API 错误: ${await response.text()}`);
-  const data = await response.json();
-  return data.choices[0]?.message?.content?.trim() || "";
+  const data: ZhipuResponse = await response.json();
+  
+  const choice = data.choices[0];
+  if (!choice) throw new Error("API 返回空响应");
+  
+  const rawContent = choice.message?.content?.trim() || "";
+  
+  if (rawContent) return rawContent;
+  
+  if (choice.message?.reasoning_content) {
+    throw new Error("Thinking模型返回空内容，请重试");
+  }
+  
+  throw new Error("API返回空内容");
 }
 
 async function generateReply(
@@ -114,20 +156,22 @@ async function generateReply(
   if (!friend) throw new Error("朋友不存在");
 
   const systemPrompt = buildSystemPrompt(friend);
-  const context = buildContext(conversationId);
-  const fullMessage = context ? `${context}\n我：${userMessage}` : userMessage;
+  const messages = buildMessages(conversationId, userMessage);
 
   let lastError: any = null;
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await callZhipuVision(systemPrompt, fullMessage, images, {
+      const result = await callZhipuVision(systemPrompt, messages, images, {
         apiKey: config.apiKey,
         model: config.chatModel,
       });
+      if (!result || !result.trim()) {
+        throw new Error("收到空白回复");
+      }
+      return result;
     } catch (err: any) {
       lastError = err;
       if (i < maxRetries - 1) {
-        // 指数退避：1s, 2s, 4s, 8s...
         const waitTime = Math.pow(2, i) * 1000;
         console.warn(`[AI Client] 请求失败 (${err.message}), ${waitTime/1000}s 后进行第 ${i + 1} 次重试...`);
         await new Promise((r) => setTimeout(r, waitTime));
@@ -160,6 +204,9 @@ export async function generateReplies(
       const msg = createMessage({ conversationId, senderId: friendId, senderName: friend.name, content: reply, timestamp: Date.now(), status: "sent" });
       results.push(msg);
       updateConversationLastMessage(conversationId, reply);
+      const intimacyGain = Math.floor(Math.random() * 3) + 1;
+      const moodGain = Math.floor(Math.random() * 5) + 1;
+      updateFriendStats(friendId, intimacyGain, moodGain);
       if (onReply) onReply(msg);
     } catch (err: any) {
       errors.push(`${friend.name}: ${err.message}`);

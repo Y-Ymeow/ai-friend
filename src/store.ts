@@ -33,6 +33,7 @@ let sendTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingContent = "";
 let pendingImages: string[] = [];
 let autoReplyTimer: ReturnType<typeof setInterval> | null = null;
+const lastAutoReplyTime: Map<string, number> = new Map();
 
 // === 刷新 ===
 export function refreshFriends() {
@@ -310,15 +311,18 @@ export function startAppServices() {
         const diffMinutes = (Date.now() - baseTime) / (1000 * 60);
 
         if (diffMinutes >= friend.autoReply.idleMinutes) {
-          // 只有最后一条消息【不是用户发的】，AI 才主动跟进（避免打断用户刚发的还没回的消息）
-          // 或者压根没有消息时
-          if (!lastMsg || lastMsg.senderId !== "user") {
-            console.log(
-              `[Store] 距离最后一条消息已过 ${Math.floor(diffMinutes)} 分钟，${friend.name} 发起跟进...`,
-            );
+          const lastAuto = lastAutoReplyTime.get(conv.id) || 0;
+          const autoDiffMinutes = (Date.now() - lastAuto) / (1000 * 60);
 
-            // 更新会话时间，防止在一分钟后的下次轮询中再次触发
-            updateConversationLastMessage(conv.id, conv.lastMessage || "");
+          if (autoDiffMinutes < friend.autoReply.idleMinutes) {
+            continue;
+          }
+
+          if (lastMsg && lastMsg.senderId === "user") {
+            console.log(
+              `[Store] 用户 ${Math.floor(diffMinutes)} 分钟未回复，${friend.name} 主动跟进...`,
+            );
+            lastAutoReplyTime.set(conv.id, Date.now());
 
             await generateReplies(
               conv.id,
@@ -328,7 +332,6 @@ export function startAppServices() {
               (msg) => {
                 refreshMessages();
                 refreshConversations();
-                // TODO: 发送系统通知
                 if (
                   "Notification" in window &&
                   Notification.permission === "granted"

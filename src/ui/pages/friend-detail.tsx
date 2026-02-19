@@ -11,6 +11,7 @@ import {
   addMemory,
   removeMemory,
 } from "../../store";
+import { generateAvatar } from "../../db/db";
 import type { Friend, Memory } from "../../types";
 
 interface Props {
@@ -26,6 +27,7 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [newMemory, setNewMemory] = useState("");
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
 
   const refreshData = () => {
     const f = friends.value.find((f) => f.id === friendId);
@@ -91,6 +93,20 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({
     });
   };
 
+  const handleGenerateAvatar = async () => {
+    if (!friend || isGeneratingAvatar) return;
+    setIsGeneratingAvatar(true);
+    try {
+      const avatarUrl = await generateAvatar(friend);
+      handleUpdate({ avatar: avatarUrl });
+      refreshData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "生成头像失败");
+    } finally {
+      setIsGeneratingAvatar(false);
+    }
+  };
+
   return (
     <div class="h-full flex flex-col bg-background text-foreground">
       {/* 磨砂感头部 */}
@@ -122,10 +138,24 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({
           {/* 核心状态看板 */}
           <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="col-span-1 md:col-span-2 flex flex-col items-center py-4 mb-4">
-              <div class="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent/40 flex items-center justify-center text-3xl font-bold shadow-lg shadow-accent/20 mb-3">
-                {friend.name.charAt(0)}
+              <div class="relative group">
+                <div class="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent/40 flex items-center justify-center text-3xl font-bold shadow-lg shadow-accent/20 overflow-hidden">
+                  {friend.avatar ? (
+                    <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" />
+                  ) : (
+                    friend.name.charAt(0)
+                  )}
+                </div>
+                <button
+                  onClick={handleGenerateAvatar}
+                  disabled={isGeneratingAvatar}
+                  class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-accent text-white text-xs flex items-center justify-center shadow-md hover:bg-accent/80 transition-opacity opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                  title="生成头像"
+                >
+                  {isGeneratingAvatar ? "⏳" : "🎨"}
+                </button>
               </div>
-              <Badge variant="outline" class="px-3 py-1">
+              <Badge variant="outline" class="px-3 py-1 mt-3">
                 亲密度 Lv.{(friend.intimacy / 100).toFixed(0)}
               </Badge>
             </div>

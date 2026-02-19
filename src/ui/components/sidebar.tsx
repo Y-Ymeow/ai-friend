@@ -49,6 +49,13 @@ export const Sidebar: FunctionalComponent<Props> = ({
     return `群聊 (${conv.friendIds.length})`;
   };
 
+  const getConvAvatar = (conv: Conversation): string | null => {
+    if (conv.type === "private") {
+      return friends.find((f) => f.id === conv.friendIds[0])?.avatar || null;
+    }
+    return null;
+  };
+
   const getPrivateConvId = (friendId: string): string | null => {
     const conv = conversations.find((c) => c.type === "private" && c.friendIds[0] === friendId);
     return conv?.id || null;
@@ -90,7 +97,9 @@ export const Sidebar: FunctionalComponent<Props> = ({
                   onClick={() => onShowFriendDetail(friend.id)}
                   onContextMenu={(e) => handleContextMenu(e as any, "friend", friend.id)}
                 >
-                  <div class="w-8 h-8 rounded-full bg-accent/30 flex items-center justify-center text-sm">{friend.name.charAt(0)}</div>
+                  <div class="w-8 h-8 rounded-full bg-accent/30 flex items-center justify-center text-sm overflow-hidden">
+                  {friend.avatar ? <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" /> : friend.name.charAt(0)}
+                </div>
                   <div class="flex-1 min-w-0">
                     <div class="text-sm truncate">{friend.name}</div>
                     <div class="text-xs text-muted truncate">{friend.personality}</div>
@@ -127,7 +136,9 @@ export const Sidebar: FunctionalComponent<Props> = ({
                   onClick={() => onSelectConv(conv.id)}
                   onContextMenu={(e) => handleContextMenu(e as any, "conv", conv.id)}
                 >
-                  <div class="w-8 h-8 rounded-full bg-accent/30 flex items-center justify-center text-sm">{convName.charAt(0)}</div>
+                  <div class="w-8 h-8 rounded-full bg-accent/30 flex items-center justify-center text-sm overflow-hidden">
+                  {getConvAvatar(conv) ? <img src={getConvAvatar(conv)!} alt={convName} class="w-full h-full object-cover" /> : convName.charAt(0)}
+                </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-1">
                       <span class="text-sm truncate">{convName}</span>

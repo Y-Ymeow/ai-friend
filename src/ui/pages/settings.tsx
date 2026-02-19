@@ -2,7 +2,7 @@ import { type FunctionalComponent } from "preact"
 import { useState, useRef } from "preact/hooks"
 import { Button } from "../components/button"
 import { Card, CardHeader, CardTitle, CardContent } from "../components/card"
-import { getZhipuConfig, setZhipuConfig, exportDatabase, importDatabase, clearDatabase } from "../../db/db"
+import { getZhipuConfig, setZhipuConfig, exportDatabase, importDatabase, clearDatabase, getShowImages, setShowImages } from "../../db/db"
 import { CHAT_MODELS } from "../../types"
 
 interface Props {
@@ -14,12 +14,14 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
   const config = getZhipuConfig()
   const [apiKey, setApiKey] = useState(config?.apiKey || "")
   const [chatModel, setChatModel] = useState(config?.chatModel || "GLM-4.6V-Flash")
+  const [showImages, setShowImagesState] = useState(getShowImages())
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleSave = () => {
     setZhipuConfig({ apiKey, chatModel })
+    setShowImages(showImages)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -113,6 +115,19 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
                 </label>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showImages}
+                onChange={(e) => setShowImagesState((e.target as HTMLInputElement).checked)}
+                class="w-4 h-4"
+              />
+              <span class="text-sm">在聊天中显示图片</span>
+            </label>
+            <p class="text-xs text-muted mt-1">关闭后消息中的图片将不会显示</p>
           </div>
 
           <Button class="w-full" onClick={handleSave}>

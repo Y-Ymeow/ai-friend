@@ -394,9 +394,62 @@ export function setZhipuConfig(config: Partial<ZhipuConfig>): void {
   if (config.imageModel) localStorage.setItem("zhipu_image_model", config.imageModel);
 }
 
+export function getShowImages(): boolean {
+  return localStorage.getItem("show_images") !== "false";
+}
+
+export function setShowImages(show: boolean): void {
+  localStorage.setItem("show_images", String(show));
+}
+
+export function updateFriendStats(id: string, intimacyGain: number, moodGain: number): void {
+  const friend = getFriend(id);
+  if (!friend) return;
+  
+  const newIntimacy = Math.min(1000, friend.intimacy + intimacyGain);
+  const newMood = Math.min(100, Math.max(0, friend.mood + moodGain));
+  
+  updateFriend(id, { 
+    intimacy: newIntimacy, 
+    mood: newMood,
+    lastStateUpdate: Date.now()
+  });
+}
+
 export function clearDatabase(): void {
   if (db) {
     db.run("DELETE FROM friends; DELETE FROM conversations; DELETE FROM messages; DELETE FROM memories;");
     saveDb();
   }
+}
+
+export async function generateAvatar(friend: Friend): Promise<string> {
+  const config = getZhipuConfig();
+  if (!config) throw new Error("请先配置 API Key");
+
+  const prompt = `生成一个二次元风格的头像，人物特点：${friend.appearance || '年轻女性'}，性格：${friend.personality?.slice(0, 50) || '温柔'}。要求：正面肖像，简洁背景，适合作为社交头像。`;
+
+  const response = await fetch("https://open.bigmodel.cn/api/paas/v4/images/generations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.imageModel,
+      prompt,
+      size: "1024x1024",
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`生成失败: ${err}`);
+  }
+
+  const data = await response.json();
+  const imageUrl = data.data?.[0]?.url;
+  if (!imageUrl) throw new Error("未返回图片URL");
+
+  return imageUrl;
 }

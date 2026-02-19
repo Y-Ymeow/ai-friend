@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "preact/hooks"
 import { Button } from "../components/button"
 import { cn } from "../lib/utils"
 import { compressImage } from "../../lib/image"
+import { getShowImages } from "../../db/db"
 import type { Message, Friend, Conversation } from "../../types"
 
 interface Props {
@@ -27,6 +28,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
   const [images, setImages] = useState<string[]>([])
   const [offset, setOffset] = useState(0)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const showImages = getShowImages()
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -59,6 +61,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
     if ((!text.trim() && images.length === 0) || disabled) return
     onSend(text.trim(), images)
     setText("")
+    setImages([])
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 
@@ -95,6 +98,14 @@ export const ChatArea: FunctionalComponent<Props> = ({
     return `群聊 (${conversation.friendIds.length}人)`
   }
 
+  const getTitleAvatar = (): string | null => {
+    if (!conversation) return null
+    if (conversation.type === 'private') {
+      return friends.find(f => f.id === conversation.friendIds[0])?.avatar || null
+    }
+    return null
+  }
+
   const handleTitleClick = () => {
     if (conversation?.type === 'private' && onShowDetail) {
       onShowDetail(conversation.friendIds[0])
@@ -105,6 +116,11 @@ export const ChatArea: FunctionalComponent<Props> = ({
     <div class="h-full flex flex-col bg-background">
       <header class="flex-shrink-0 h-12 px-3 flex items-center gap-2 border-b border-border">
         <button class="lg:hidden text-xl text-muted hover:text-white" onClick={onOpenSidebar}>☰</button>
+        {conversation && getTitleAvatar() && (
+          <div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+            <img src={getTitleAvatar()!} alt={getTitle()} class="w-full h-full object-cover" />
+          </div>
+        )}
         <h1 
           class={cn("font-semibold truncate", conversation?.type === 'private' && "cursor-pointer hover:text-accent")} 
           onClick={handleTitleClick}
@@ -132,8 +148,8 @@ export const ChatArea: FunctionalComponent<Props> = ({
 
             return (
               <div key={msg.id} class={cn("flex gap-2 group", isUser && "flex-row-reverse")}>
-                <div class={cn("w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm", isUser ? "bg-accent text-white" : "bg-surface-hover")}>
-                  {isUser ? '我' : (friend?.name || '友').charAt(0)}
+                <div class={cn("w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm overflow-hidden", isUser ? "bg-accent text-white" : "bg-surface-hover")}>
+                  {isUser ? '我' : friend?.avatar ? <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" /> : (friend?.name || '友').charAt(0)}
                 </div>
                 <div class={cn("max-w-[75%] rounded-2xl px-3 py-2 relative", isUser ? "bg-accent text-white rounded-tr-sm" : "bg-surface-hover rounded-tl-sm")}>
                   {!isUser && (
@@ -142,7 +158,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
                       {isTyping && <span class="text-accent animate-pulse">输入中...</span>}
                     </div>
                   )}
-                  {msg.images && msg.images.length > 0 && (
+                  {msg.images && msg.images.length > 0 && showImages && (
                     <div class="flex flex-wrap gap-1 mb-1">
                       {msg.images.map((img, i) => (
                         <img key={i} src={img} class="max-w-[120px] max-h-[120px] rounded cursor-pointer" onClick={() => setPreviewIndex(i)} />
@@ -174,6 +190,24 @@ export const ChatArea: FunctionalComponent<Props> = ({
         {isWaiting && <div class="text-center text-muted text-sm italic">等待更多输入... (3秒后回复)</div>}
         <div ref={bottomRef} />
       </div>
+
+      {images.length > 0 && (
+        <div class="flex-shrink-0 px-3 pt-2 flex gap-2 flex-wrap border-t border-border">
+          {images.map((img, i) => (
+            <div key={i} class="relative group">
+              <img src={img} class="w-16 h-16 object-cover rounded border border-border" />
+              <button
+                onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
+                class="absolute -top-1 -right-1 w-5 h-5 bg-danger text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              >×</button>
+            </div>
+          ))}
+          <button
+            onClick={() => setImages([])}
+            class="w-16 h-16 flex items-center justify-center border border-dashed border-border rounded text-muted text-xs hover:border-accent hover:text-accent transition-colors"
+          >清除全部</button>
+        </div>
+      )}
 
       <div class="flex-shrink-0 p-3 border-t border-border flex gap-2 items-end">
         <input ref={fileRef} type="file" accept="image/*" multiple class="hidden" onChange={handleFiles} />

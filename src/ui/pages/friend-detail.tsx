@@ -10,8 +10,9 @@ import {
   fetchMemories,
   addMemory,
   removeMemory,
+  generateFriendState,
 } from "../../store";
-import { generateAvatar } from "../../db/db";
+import { generateAvatar, getMessages } from "../../db/db";
 import type { Friend, Memory } from "../../types";
 
 interface Props {
@@ -65,32 +66,59 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({
     refreshData();
   };
 
-  const refreshState = () => {
-    const outfits = [
-      "卫衣",
-      "连衣裙",
-      "小西装",
-      "睡衣",
-      "运动服",
-      "衬衫",
-      "针织衫",
-      "牛仔夹克",
-    ];
-    const physicals = [
-      "精力充沛",
-      "元气满满",
-      "有点想睡觉",
-      "想吃甜食",
-      "心情大好",
-      "状态一般",
-      "有点感冒",
-    ];
-    handleUpdate({
-      outfit: outfits[Math.floor(Math.random() * outfits.length)],
-      physicalCondition:
-        physicals[Math.floor(Math.random() * physicals.length)],
-      lastStateUpdate: Date.now(),
-    });
+  const [isRefreshingState, setIsRefreshingState] = useState(false);
+
+  const refreshState = async () => {
+    setIsRefreshingState(true);
+    try {
+      // 获取与该好友的最近聊天记录
+      const conversations = await import("../../store").then(m => m.conversations.value);
+      const conv = conversations.find(
+        c => c.type === "private" && c.friendIds.length === 1 && c.friendIds[0] === friendId
+      );
+      
+      let recentMessages: { senderName: string; content: string; timestamp: number }[] = [];
+      if (conv) {
+        const msgs = getMessages(conv.id, 10, 0);
+        recentMessages = msgs.map(m => ({
+          senderName: m.senderName,
+          content: m.content,
+          timestamp: m.timestamp
+        }));
+      }
+      
+      // 调用 AI 生成状态
+      const state = await generateFriendState(friend, recentMessages);
+      
+      handleUpdate({
+        outfit: state.outfit,
+        physicalCondition: state.physicalCondition,
+        mood: state.mood,
+        lastStateUpdate: Date.now(),
+      });
+    } catch (err) {
+      console.error("刷新状态失败:", err);
+      // 失败时使用随机状态
+      const outfits = [
+        "oversize卫衣", "碎花连衣裙", "修身小西装", "毛绒睡衣", "运动套装",
+        "白衬衫", "针织开衫", "牛仔外套", "格子衬衫", "黑色高领",
+        "百褶裙", "工装裤", "连帽外套", "真丝睡衣", "复古背带裤",
+        "露肩上衣", "休闲短裤", "长款风衣", "紧身瑜伽服", "纯棉T恤",
+      ];
+      const physicals = [
+        "元气满满", "有点犯困", "精神焕发", "状态一般", "好想睡觉",
+        "鼻子不通", "胃口大开", "充满活力", "腰酸背痛", "心情愉悦",
+        "头昏脑胀", "饿了饿了", "神清气爽", "有点emo", "活力四射",
+        "口干舌燥", "浑身舒畅", "略感疲惫", "精神集中", "心情烦躁",
+      ];
+      handleUpdate({
+        outfit: outfits[Math.floor(Math.random() * outfits.length)],
+        physicalCondition: physicals[Math.floor(Math.random() * physicals.length)],
+        lastStateUpdate: Date.now(),
+      });
+    } finally {
+      setIsRefreshingState(false);
+    }
   };
 
   const handleGenerateAvatar = async () => {
@@ -127,9 +155,10 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({
           variant="outline"
           size="sm"
           onClick={refreshState}
+          disabled={isRefreshingState}
           class="rounded-full gap-2 px-4"
         >
-          ✨ 刷新状态
+          {isRefreshingState ? "⏳ 生成中..." : "✨ 刷新状态"}
         </Button>
       </header>
 

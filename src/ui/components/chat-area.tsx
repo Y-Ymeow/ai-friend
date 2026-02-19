@@ -129,7 +129,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
         </h1>
       </header>
 
-      <div class="flex-1 overflow-auto p-4 pb-20 lg:pb-4 space-y-3">
+      <div class="flex-1 overflow-auto p-4 space-y-3">
         {conversation && messages.length >= 20 && (
           <div class="text-center py-2">
             <button onClick={handleLoadMore} class="text-xs text-accent hover:underline">查看更多历史消息</button>
@@ -192,7 +192,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
       </div>
 
       {images.length > 0 && (
-        <div class="fixed lg:relative bottom-[72px] lg:bottom-auto left-0 right-0 lg:left-auto lg:right-auto z-10 lg:z-auto px-3 pt-2 pb-2 lg:pb-0 flex gap-2 flex-wrap border-t border-border bg-background lg:bg-transparent lg:flex-shrink-0">
+        <div class="flex-shrink-0 px-3 pt-2 flex gap-2 flex-wrap border-t border-border">
           {images.map((img, i) => (
             <div key={i} class="relative group">
               <img src={img} class="w-16 h-16 object-cover rounded border border-border" />
@@ -209,7 +209,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
         </div>
       )}
 
-      <div class="fixed lg:relative bottom-0 left-0 right-0 lg:left-auto lg:right-auto z-10 lg:z-auto p-3 border-t border-border bg-background lg:bg-transparent flex gap-2 items-end">
+      <div class="flex-shrink-0 p-3 border-t border-border flex gap-2 items-end">
         <input ref={fileRef} type="file" accept="image/*" multiple class="hidden" onChange={handleFiles} />
         <Button variant="outline" size="icon" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>🖼</Button>
         <textarea

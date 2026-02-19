@@ -293,12 +293,20 @@ export async function sendUserMessage(
 export function startAppServices() {
   if (autoReplyTimer) return;
   console.log("[Store] 启动自动回复服务...");
-  autoReplyTimer = setInterval(async () => {
-    console.log("[Store] 检查自动回复...");
-    for (const friend of friends.value) {
-      if (!friend.autoReply?.enabled) continue;
+  
+  const checkAutoReply = async () => {
+    const allFriends = getFriends();
+    const allConvs = getConversations();
+    
+    console.log(`[Store] 检查自动回复... 共 ${allFriends.length} 个好友, ${allConvs.length} 个会话`);
+    
+    for (const friend of allFriends) {
+      if (!friend.autoReply?.enabled) {
+        console.log(`[Store] ${friend.name} 未开启自动回复`);
+        continue;
+      }
       
-      const conv = conversations.value.find(
+      const conv = allConvs.find(
         (c) =>
           c.type === "private" &&
           c.friendIds.length === 1 &&
@@ -312,13 +320,16 @@ export function startAppServices() {
       const lastMsg = getLastMessage(conv.id);
       const baseTime = lastMsg ? lastMsg.timestamp : conv.createdAt;
       const diffMinutes = (Date.now() - baseTime) / (1000 * 60);
-      const idleMinutes = friend.autoReply.idleMinutes || 5;
+      const idleMinutes = friend.autoReply.idleMinutes || 30;
 
       console.log(
-        `[Store] ${friend.name}: lastMsg=${lastMsg ? `${lastMsg.senderName}: ${lastMsg.content.slice(0, 20)}...` : "无"}, diff=${Math.floor(diffMinutes)}分钟, idle=${idleMinutes}分钟`
+        `[Store] ${friend.name}: 最后消息=${lastMsg ? `${lastMsg.senderName}: ${lastMsg.content.slice(0, 20)}...` : "无"}, 已过=${Math.floor(diffMinutes)}分钟, 需等待=${idleMinutes}分钟`
       );
 
-      if (diffMinutes < idleMinutes) continue;
+      if (diffMinutes < idleMinutes) {
+        console.log(`[Store] ${friend.name} 时间未到，跳过`);
+        continue;
+      }
 
       const lastAuto = lastAutoReplyTime.get(conv.id) || 0;
       const autoDiffMinutes = (Date.now() - lastAuto) / (1000 * 60);
@@ -338,8 +349,9 @@ export function startAppServices() {
             "(用户已经很久没理你了，请根据你们的关系和当前时间，主动发一条消息引起对方注意)",
             [],
             (msg) => {
-              refreshMessages();
+              refreshFriends();
               refreshConversations();
+              refreshMessages();
               if ("Notification" in window && Notification.permission === "granted") {
                 new Notification(`${friend.name}`, { body: msg.content });
               }
@@ -350,7 +362,10 @@ export function startAppServices() {
         }
       }
     }
-  }, 60000);
+  };
+  
+  autoReplyTimer = setInterval(checkAutoReply, 60000);
+  checkAutoReply();
 }
 
 export async function retryAIResponse(): Promise<string[]> {

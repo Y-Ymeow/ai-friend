@@ -100,15 +100,15 @@ export function App() {
   }, [])
 
   if (loading) {
-    return <div class="h-screen flex items-center justify-center bg-background text-muted">加载中...</div>
+    return <div class="h-dvh flex items-center justify-center bg-background text-muted">加载中...</div>
   }
 
   if (currentPage.value === 'settings') {
-    return <div class="h-screen bg-background"><SettingsPage onBack={() => navigate('home')} onReset={handleReset} /></div>
+    return <div class="h-dvh bg-background"><SettingsPage onBack={() => navigate('home')} onReset={handleReset} /></div>
   }
 
   if (currentPage.value === 'friend-detail' && routeParams.value.id) {
-    return <div class="h-screen bg-background"><FriendDetailPage friendId={routeParams.value.id} onBack={() => navigate('chat', { id: currentConversationId.value || "" })} /></div>
+    return <div class="h-dvh bg-background"><FriendDetailPage friendId={routeParams.value.id} onBack={() => navigate('chat', { id: currentConversationId.value || "" })} /></div>
   }
 
   const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
@@ -127,7 +127,7 @@ export function App() {
   }
 
   return (
-    <div class="h-screen flex bg-background">
+    <div class="h-dvh flex bg-background">
       {error && (
         <div class="fixed top-0 left-0 right-0 z-50 bg-danger/20 text-danger px-4 py-2 text-sm text-center">
           {error} <button class="ml-2 underline" onClick={() => setError(null)}>关闭</button>

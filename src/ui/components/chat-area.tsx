@@ -43,6 +43,28 @@ export const ChatArea: FunctionalComponent<Props> = ({
     }
   }, [messages.length])
 
+  // 监听键盘弹出/收起（视口高度变化），自动滚动到底部
+  useEffect(() => {
+    const handleResize = () => {
+      // 使用 setTimeout 确保在布局调整完成后再滚动
+      setTimeout(() => {
+        if (offset === 0) {
+          bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+        }
+      }, 100)
+    }
+
+    // 监听 visualViewport 变化（更精确的键盘检测）
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize)
+      return () => window.visualViewport?.removeEventListener('resize', handleResize)
+    } else {
+      // 降级到 window resize
+      window.addEventListener('resize', handleResize)
+      return () => window.removeEventListener('resize', handleResize)
+    }
+  }, [offset])
+
   const adjustTextareaHeight = () => {
     const ta = textareaRef.current
     if (!ta) return

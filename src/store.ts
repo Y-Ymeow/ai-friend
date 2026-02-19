@@ -293,19 +293,21 @@ export async function sendUserMessage(
 export function startAppServices() {
   if (autoReplyTimer) return;
   console.log("[Store] 启动自动回复服务...");
-  
+
   const checkAutoReply = async () => {
     const allFriends = getFriends();
     const allConvs = getConversations();
-    
-    console.log(`[Store] 检查自动回复... 共 ${allFriends.length} 个好友, ${allConvs.length} 个会话`);
-    
+
+    console.log(
+      `[Store] 检查自动回复... 共 ${allFriends.length} 个好友, ${allConvs.length} 个会话`,
+    );
+
     for (const friend of allFriends) {
       if (!friend.autoReply?.enabled) {
         console.log(`[Store] ${friend.name} 未开启自动回复`);
         continue;
       }
-      
+
       const conv = allConvs.find(
         (c) =>
           c.type === "private" &&
@@ -323,7 +325,7 @@ export function startAppServices() {
       const idleMinutes = friend.autoReply.idleMinutes || 30;
 
       console.log(
-        `[Store] ${friend.name}: 最后消息=${lastMsg ? `${lastMsg.senderName}: ${lastMsg.content.slice(0, 20)}...` : "无"}, 已过=${Math.floor(diffMinutes)}分钟, 需等待=${idleMinutes}分钟`
+        `[Store] ${friend.name}: 最后消息=${lastMsg ? `${lastMsg.senderName}: ${lastMsg.content.slice(0, 20)}...` : "无"}, 已过=${Math.floor(diffMinutes)}分钟, 需等待=${idleMinutes}分钟`,
       );
 
       if (diffMinutes < idleMinutes) {
@@ -334,11 +336,13 @@ export function startAppServices() {
       const lastAuto = lastAutoReplyTime.get(conv.id) || 0;
       const autoDiffMinutes = (Date.now() - lastAuto) / (1000 * 60);
       if (autoDiffMinutes < idleMinutes) {
-        console.log(`[Store] ${friend.name} 上次自动回复在 ${Math.floor(autoDiffMinutes)} 分钟前，跳过`);
+        console.log(
+          `[Store] ${friend.name} 上次自动回复在 ${Math.floor(autoDiffMinutes)} 分钟前，跳过`,
+        );
         continue;
       }
 
-      if (!lastMsg || lastMsg.senderId === "user") {
+      if (!lastMsg || lastMsg.senderId !== "user") {
         console.log(`[Store] ${friend.name} 触发自动回复...`);
         lastAutoReplyTime.set(conv.id, Date.now());
 
@@ -352,7 +356,10 @@ export function startAppServices() {
               refreshFriends();
               refreshConversations();
               refreshMessages();
-              if ("Notification" in window && Notification.permission === "granted") {
+              if (
+                "Notification" in window &&
+                Notification.permission === "granted"
+              ) {
                 new Notification(`${friend.name}`, { body: msg.content });
               }
             },
@@ -363,7 +370,7 @@ export function startAppServices() {
       }
     }
   };
-  
+
   autoReplyTimer = setInterval(checkAutoReply, 60000);
   checkAutoReply();
 }

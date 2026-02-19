@@ -20,6 +20,7 @@ import {
   generateReplies,
   isGenerating,
   generatingFriendIds,
+  generateFriendState,
 } from "./ai/client";
 import type { Friend, Conversation, Message, Memory } from "./types";
 
@@ -54,23 +55,48 @@ export function refreshFriends() {
         Math.min(100, f.mood + (Math.random() * 40 - 20)),
       );
       const outfits = [
-        "休闲装",
-        "运动服",
-        "正装",
-        "居家服",
-        "裙子",
-        "睡衣",
-        "毛衣",
-        "牛仔裤",
+        "oversize卫衣",
+        "碎花连衣裙",
+        "修身小西装",
+        "毛绒睡衣",
+        "运动套装",
+        "白衬衫",
+        "针织开衫",
+        "牛仔外套",
+        "格子衬衫",
+        "黑色高领",
+        "百褶裙",
+        "工装裤",
+        "连帽外套",
+        "真丝睡衣",
+        "复古背带裤",
+        "露肩上衣",
+        "休闲短裤",
+        "长款风衣",
+        "紧身瑜伽服",
+        "纯棉T恤",
       ];
       const physicals = [
-        "精力充沛",
-        "有点累",
-        "很精神",
-        "一般般",
-        "想睡觉",
-        "有点感冒",
+        "元气满满",
+        "有点犯困",
+        "精神焕发",
+        "状态一般",
+        "好想睡觉",
+        "鼻子不通",
         "胃口大开",
+        "充满活力",
+        "腰酸背痛",
+        "心情愉悦",
+        "头昏脑胀",
+        "饿了饿了",
+        "神清气爽",
+        "有点emo",
+        "活力四射",
+        "口干舌燥",
+        "浑身舒畅",
+        "略感疲惫",
+        "精神集中",
+        "心情烦躁",
       ];
       const newF = {
         ...f,
@@ -347,10 +373,40 @@ export function startAppServices() {
         lastAutoReplyTime.set(conv.id, Date.now());
 
         try {
+          // 获取最近的聊天记录来构建上下文
+          const recentMsgs = getMessages(conv.id, 10, 0);
+          const now = new Date();
+          const hour = now.getHours();
+          const timeOfDay = hour < 6 ? "深夜" : hour < 12 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : "晚上";
+
+          // 构建智能提示词
+          let prompt = "";
+          if (recentMsgs.length === 0) {
+            // 全新对话，主动打招呼
+            prompt = `(${timeOfDay}了，你想起了对方，主动发个消息打个招呼或者开启一个新话题)`;
+          } else {
+            // 有聊天记录，根据上下文决定如何开启话题
+            const lastUserMsg = [...recentMsgs].reverse().find(m => m.senderId === "user");
+            const lastTopic = lastUserMsg ? lastUserMsg.content.slice(0, 30) : "";
+
+            if (lastTopic) {
+              // 根据最后话题延续或开启新话题
+              const scenarios = [
+                `(${timeOfDay}了，你突然想到之前聊的"${lastTopic}..."相关的事，想跟对方分享一下)`,
+                `(你刚做完一件事，突然想起对方，想跟${timeOfDay}还在线的TA聊几句)`,
+                `(你看到/想到某个东西，想起对方可能会喜欢/感兴趣，主动发消息)`,
+                `(你${friend.physicalCondition}，${timeOfDay}想找人聊聊天，主动开启话题)`,
+              ];
+              prompt = scenarios[Math.floor(Math.random() * scenarios.length)];
+            } else {
+              prompt = `(${timeOfDay}了，你想起了对方，主动发个消息问问TA在干嘛)`;
+            }
+          }
+
           await generateReplies(
             conv.id,
             [friend.id],
-            "(用户已经很久没理你了，请根据你们的关系和当前时间，主动发一条消息引起对方注意)",
+            prompt,
             [],
             (msg) => {
               refreshFriends();
@@ -422,4 +478,4 @@ export function resetAllData() {
   currentConversationId.value = null;
 }
 
-export { isGenerating, generatingFriendIds };
+export { isGenerating, generatingFriendIds, generateFriendState };

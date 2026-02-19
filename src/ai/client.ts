@@ -228,3 +228,117 @@ export async function generateReplies(
   generatingFriendIds.value = new Set();
   return { messages: results, errors };
 }
+
+// === 生成状态 ===
+interface FriendState {
+  outfit: string;
+  physicalCondition: string;
+  mood: number;
+}
+
+const OUTFIT_OPTIONS = [
+  "oversize卫衣", "碎花连衣裙", "修身小西装", "毛绒睡衣", "运动套装",
+  "白衬衫", "针织开衫", "牛仔外套", "格子衬衫", "黑色高领",
+  "百褶裙", "工装裤", "连帽外套", "真丝睡衣", "复古背带裤",
+  "露肩上衣", "休闲短裤", "长款风衣", "紧身瑜伽服", "纯棉T恤"
+];
+
+const PHYSICAL_OPTIONS = [
+  "元气满满", "有点犯困", "精神焕发", "状态一般", "好想睡觉",
+  "鼻子不通", "胃口大开", "充满活力", "腰酸背痛", "心情愉悦",
+  "头昏脑胀", "饿了饿了", "神清气爽", "有点emo", "活力四射",
+  "口干舌燥", "浑身舒畅", "略感疲惫", "精神集中", "心情烦躁"
+];
+
+export async function generateFriendState(
+  friend: Friend,
+  recentMessages: { senderName: string; content: string; timestamp: number }[]
+): Promise<FriendState> {
+  const config = getZhipuConfig();
+  if (!config) {
+    // 没有配置，随机选择
+    return {
+      outfit: OUTFIT_OPTIONS[Math.floor(Math.random() * OUTFIT_OPTIONS.length)],
+      physicalCondition: PHYSICAL_OPTIONS[Math.floor(Math.random() * PHYSICAL_OPTIONS.length)],
+      mood: Math.floor(Math.random() * 40) + 30
+    };
+  }
+
+  const now = new Date();
+  const hour = now.getHours();
+  const timeOfDay = hour < 6 ? "深夜" : hour < 12 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : "晚上";
+  const timeStr = now.toLocaleString("zh-CN", { month: "long", day: "numeric", weekday: "long", hour: "2-digit", minute: "2-digit" });
+
+  const chatContext = recentMessages.length > 0
+    ? `\n最近聊天：\n${recentMessages.slice(-5).map(m => `${m.senderName}: ${m.content.slice(0, 50)}`).join('\n')}`
+    : "";
+
+  const prompt = `作为${friend.name}，${timeStr}，现在是${timeOfDay}。
+你的性格：${friend.personality}
+${chatContext}
+
+请根据当前时间、你的性格${recentMessages.length > 0 ? "和最近的聊天内容" : ""}，选择你现在最可能的状态。
+
+可选穿搭：${OUTFIT_OPTIONS.join('、')}
+可选体感：${PHYSICAL_OPTIONS.join('、')}
+
+必须以JSON格式返回（不要包含任何其他文字）：
+{"outfit": "从可选穿搭中选择一个", "physicalCondition": "从可选体感中选择一个", "mood": 0-100的数字}`;
+
+  const response = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "GLM-4-Flash",
+      messages: [
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API 错误: ${response.status}`);
+  }
+
+  const data: ZhipuResponse = await response.json();
+  const content = data.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("AI 返回空内容");
+  }
+
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("无法解析 JSON");
+    }
+    const result = JSON.parse(jsonMatch[0]);
+    
+    // 验证并修正返回的数据
+    let outfit = result.outfit;
+    let physical = result.physicalCondition;
+    
+    if (!OUTFIT_OPTIONS.includes(outfit)) {
+      outfit = OUTFIT_OPTIONS[Math.floor(Math.random() * OUTFIT_OPTIONS.length)];
+    }
+    if (!PHYSICAL_OPTIONS.includes(physical)) {
+      physical = PHYSICAL_OPTIONS[Math.floor(Math.random() * PHYSICAL_OPTIONS.length)];
+    }
+    
+    return {
+      outfit,
+      physicalCondition: physical,
+      mood: Math.max(0, Math.min(100, Math.round(result.mood) || 50))
+    };
+  } catch (e) {
+    // 解析失败，返回随机状态
+    return {
+      outfit: OUTFIT_OPTIONS[Math.floor(Math.random() * OUTFIT_OPTIONS.length)],
+      physicalCondition: PHYSICAL_OPTIONS[Math.floor(Math.random() * PHYSICAL_OPTIONS.length)],
+      mood: Math.floor(Math.random() * 40) + 30
+    };
+  }
+}

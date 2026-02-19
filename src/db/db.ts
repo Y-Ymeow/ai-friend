@@ -370,6 +370,22 @@ export function getMessages(conversationId: string, limit = 20, offset = 0): Mes
   return msgs.reverse();
 }
 
+export function getLastMessage(conversationId: string): Message | null {
+  const result = db!.exec(`SELECT id, conversation_id, sender_id, sender_name, content, timestamp, status, images FROM messages WHERE conversation_id = '${conversationId}' ORDER BY timestamp DESC LIMIT 1`);
+  if (result.length === 0 || result[0].values.length === 0) return null;
+  const row = result[0].values[0];
+  return {
+    id: row[0] as string,
+    conversationId: row[1] as string,
+    senderId: row[2] as string,
+    senderName: row[3] as string,
+    content: row[4] as string,
+    timestamp: row[5] as number,
+    status: row[6] as any,
+    images: row[7] ? JSON.parse(row[7] as string) : undefined,
+  };
+}
+
 export function createMessage(msg: Omit<Message, "id">): Message {
   const id = `msg_${Date.now()}`;
   const sql = `INSERT INTO messages (id, conversation_id, sender_id, sender_name, content, timestamp, status, images) VALUES ('${id}', '${msg.conversationId}', '${msg.senderId}', '${msg.senderName.replace(/'/g, "''")}', '${msg.content.replace(/'/g, "''")}', ${msg.timestamp}, '${msg.status}', '${msg.images ? JSON.stringify(msg.images).replace(/'/g, "''") : ""}')`;

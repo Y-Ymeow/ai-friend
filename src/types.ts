@@ -56,15 +56,15 @@ export interface Conversation {
 // === 智谱配置 ===
 export interface ZhipuConfig {
   apiKey: string
-  chatModel: 'GLM-4.6V-Flash' | 'GLM-4.1V-Thinking-Flash' | 'GLM-4V-Flash'
+  chatModel: 'GLM-4.6V-Flash' | 'GLM-4.7-Flash' | 'GLM-4V-Flash'
   imageModel: 'Cogview-3-Flash'
 }
 
-// 可用模型
+// 可用模型（supportsVision 表示是否支持图片）
 export const CHAT_MODELS = [
-  { id: 'GLM-4.6V-Flash', name: 'GLM-4.6V-Flash', desc: '推荐：128K上下文，视觉SOTA，支持思考模式' },
-  { id: 'GLM-4.1V-Thinking-Flash', name: 'GLM-4.1V-Thinking-Flash', desc: '深度思考，适合复杂推理' },
-  { id: 'GLM-4V-Flash', name: 'GLM-4V-Flash', desc: '经典视觉模型' }
+  { id: 'GLM-4.6V-Flash', name: 'GLM-4.6V-Flash', desc: '128K上下文，视觉模型', supportsVision: true },
+  { id: 'GLM-4.7-Flash', name: 'GLM-4.7-Flash', desc: '最新文本模型，速度快', supportsVision: false },
+  { id: 'GLM-4V-Flash', name: 'GLM-4V-Flash', desc: '经典视觉模型', supportsVision: true }
 ] as const
 
 export const IMAGE_MODELS = [

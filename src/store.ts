@@ -3,6 +3,7 @@ import {
   getFriends,
   getConversations,
   getMessages,
+  getLastMessage,
   createFriend as dbCreateFriend,
   deleteFriend as dbDeleteFriend,
   createConversation as dbCreateConversation,
@@ -291,56 +292,61 @@ export async function sendUserMessage(
 // === 自动回复服务 ===
 export function startAppServices() {
   if (autoReplyTimer) return;
+  console.log("[Store] 启动自动回复服务...");
   autoReplyTimer = setInterval(async () => {
-    console.log("[Store] 正在检查自动回复...");
+    console.log("[Store] 检查自动回复...");
     for (const friend of friends.value) {
-      if (friend.autoReply && friend.autoReply.enabled) {
-        const conv = conversations.value.find(
-          (c) =>
-            c.type === "private" &&
-            c.friendIds.length === 1 &&
-            c.friendIds[0] === friend.id,
-        );
-        if (!conv) continue;
+      if (!friend.autoReply?.enabled) continue;
+      
+      const conv = conversations.value.find(
+        (c) =>
+          c.type === "private" &&
+          c.friendIds.length === 1 &&
+          c.friendIds[0] === friend.id,
+      );
+      if (!conv) {
+        console.log(`[Store] ${friend.name} 没有私聊会话`);
+        continue;
+      }
 
-        const lastMsgs = getMessages(conv.id, 1);
-        const lastMsg = lastMsgs[0];
+      const lastMsg = getLastMessage(conv.id);
+      const baseTime = lastMsg ? lastMsg.timestamp : conv.createdAt;
+      const diffMinutes = (Date.now() - baseTime) / (1000 * 60);
+      const idleMinutes = friend.autoReply.idleMinutes || 5;
 
-        // 基准时间：如果有消息则用最后一条消息时间，否则用会话创建时间
-        const baseTime = lastMsg ? lastMsg.timestamp : conv.createdAt;
-        const diffMinutes = (Date.now() - baseTime) / (1000 * 60);
+      console.log(
+        `[Store] ${friend.name}: lastMsg=${lastMsg ? `${lastMsg.senderName}: ${lastMsg.content.slice(0, 20)}...` : "无"}, diff=${Math.floor(diffMinutes)}分钟, idle=${idleMinutes}分钟`
+      );
 
-        if (diffMinutes >= friend.autoReply.idleMinutes) {
-          const lastAuto = lastAutoReplyTime.get(conv.id) || 0;
-          const autoDiffMinutes = (Date.now() - lastAuto) / (1000 * 60);
+      if (diffMinutes < idleMinutes) continue;
 
-          if (autoDiffMinutes < friend.autoReply.idleMinutes) {
-            continue;
-          }
+      const lastAuto = lastAutoReplyTime.get(conv.id) || 0;
+      const autoDiffMinutes = (Date.now() - lastAuto) / (1000 * 60);
+      if (autoDiffMinutes < idleMinutes) {
+        console.log(`[Store] ${friend.name} 上次自动回复在 ${Math.floor(autoDiffMinutes)} 分钟前，跳过`);
+        continue;
+      }
 
-          if (lastMsg && lastMsg.senderId === "user") {
-            console.log(
-              `[Store] 用户 ${Math.floor(diffMinutes)} 分钟未回复，${friend.name} 主动跟进...`,
-            );
-            lastAutoReplyTime.set(conv.id, Date.now());
+      if (!lastMsg || lastMsg.senderId === "user") {
+        console.log(`[Store] ${friend.name} 触发自动回复...`);
+        lastAutoReplyTime.set(conv.id, Date.now());
 
-            await generateReplies(
-              conv.id,
-              [friend.id],
-              "(用户已经很久没理你了，请根据你们的关系和当前时间，主动发一条消息引起对方注意)",
-              [],
-              (msg) => {
-                refreshMessages();
-                refreshConversations();
-                if (
-                  "Notification" in window &&
-                  Notification.permission === "granted"
-                ) {
-                  new Notification(`${friend.name}`, { body: msg.content });
-                }
-              },
-            );
-          }
+        try {
+          await generateReplies(
+            conv.id,
+            [friend.id],
+            "(用户已经很久没理你了，请根据你们的关系和当前时间，主动发一条消息引起对方注意)",
+            [],
+            (msg) => {
+              refreshMessages();
+              refreshConversations();
+              if ("Notification" in window && Notification.permission === "granted") {
+                new Notification(`${friend.name}`, { body: msg.content });
+              }
+            },
+          );
+        } catch (err) {
+          console.error(`[Store] ${friend.name} 自动回复失败:`, err);
         }
       }
     }

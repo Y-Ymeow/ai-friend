@@ -8,6 +8,7 @@ import {
   getMemories,
   updateFriendStats,
 } from "../db/db";
+import { CHAT_MODELS } from "../types";
 import type { Message, Friend } from "../types";
 
 // === 状态 ===
@@ -16,38 +17,33 @@ export const generatingFriendIds = signal<Set<string>>(new Set());
 
 // === 构建 Prompt ===
 function buildSystemPrompt(friend: Friend): string {
-  const now = new Date().toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const now = new Date();
+  const hour = now.getHours();
+  const timeOfDay = hour < 6 ? "深夜" : hour < 12 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : "晚上";
+  const timeStr = now.toLocaleString("zh-CN", { month: "long", day: "numeric", weekday: "long", hour: "2-digit", minute: "2-digit" });
   
   const memories = getMemories(friend.id).slice(0, 5);
   const memoryContext = memories.length > 0 
-    ? `\n长期记忆：\n${memories.map(m => `- ${m.content}`).join('\n')}`
+    ? `\n你记得关于对方的事：\n${memories.map(m => `- ${m.content}`).join('\n')}`
     : "";
 
-  return `你是${friend.name}，一个真实的朋友。你正在和用户聊天。
-当前时间：${now}
+  const moodDesc = friend.mood > 80 ? "心情很好" : friend.mood > 50 ? "心情一般" : "心情不太好";
+  const intimacyDesc = friend.intimacy > 500 ? "你们很熟了" : friend.intimacy > 200 ? "你们正在变得熟悉" : "你们还不太熟";
 
-你的当前状态：
-- 外观：${friend.appearance}
-- 今日打扮：${friend.outfit}
-- 身体状况：${friend.physicalCondition}
-- 心情指数：${friend.mood}/100
-- 亲密度：${friend.intimacy}/1000${memoryContext}
+  return `${friend.name}的回复指南：
 
-性格：${friend.personality}
+你正在和${timeOfDay}的朋友聊天。${timeStr}。
+${intimacyDesc}，${moodDesc}。
+你现在${friend.physicalCondition}，穿着${friend.outfit}。${memoryContext}
 
-【重要规则】
-1. 直接回复用户的话，不要写"我：xxx"或"用户：xxx"这样的格式
-2. 像真正的朋友一样聊天，自然、随意，1-3句话即可
-3. 可以用表情，结合当前心情
-4. 不要提及你是AI，不要写任何对话格式标记
-5. 只输出你想要说的话，不要模拟对话场景`;
+你的性格：${friend.personality}
+
+回复要求：
+- 像发微信一样，简短自然，1-2句话
+- 可以用表情符号，但别太多
+- 语气要符合你们的关系亲疏
+- 别提你是AI，别写什么"我："、"用户："这种格式
+- 就像真的在跟朋友聊天一样`;
 }
 
 interface ChatMessage {
@@ -100,8 +96,15 @@ async function callZhipuVision(
   config: { apiKey: string; model: string }
 ): Promise<string> {
   const lastMsg = messages[messages.length - 1];
-  const content: any[] = [{ type: "text", text: lastMsg.content }];
-  for (const img of images) content.push({ type: "image_url", image_url: { url: img } });
+  const modelConfig = CHAT_MODELS.find(m => m.id === config.model);
+  const supportsVision = modelConfig?.supportsVision ?? false;
+  
+  let userContent: any = lastMsg.content;
+  if (supportsVision && images.length > 0) {
+    const content: any[] = [{ type: "text", text: lastMsg.content }];
+    for (const img of images) content.push({ type: "image_url", image_url: { url: img } });
+    userContent = content;
+  }
 
   const apiMessages: any[] = [
     { role: "system", content: systemPrompt },
@@ -109,8 +112,16 @@ async function callZhipuVision(
       ? { role: m.role, name: m.name, content: m.content }
       : { role: m.role, content: m.content }
     ),
-    { role: "user", content }
+    { role: "user", content: userContent }
   ];
+
+  const body: any = {
+    model: config.model,
+    messages: apiMessages,
+    max_tokens: 256,
+    temperature: 0.9
+  };
+  body.thinking = { type: "disabled" };
 
   const response = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
     method: "POST",
@@ -118,12 +129,7 @@ async function callZhipuVision(
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`
     },
-    body: JSON.stringify({
-      model: config.model,
-      messages: apiMessages,
-      max_tokens: 256,
-      temperature: 0.85
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) throw new Error(`API 错误: ${await response.text()}`);

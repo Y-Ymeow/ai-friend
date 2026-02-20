@@ -97,7 +97,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
   }
 
   return (
-    <div class="h-full flex flex-col bg-background">
+    <div class="h-dvh flex flex-col bg-background">
       <header class="fixed lg:relative top-0 left-0 right-0 lg:left-auto lg:right-auto lg:top-auto z-20 h-12 px-3 flex items-center gap-2 border-b border-border bg-background">
         <button class="lg:hidden text-xl text-muted hover:text-white" onClick={onOpenSidebar}>☰</button>
         {conversation && getTitleAvatar() && (
@@ -105,15 +105,15 @@ export const ChatArea: FunctionalComponent<Props> = ({
             <img src={getTitleAvatar()!} alt={getTitle()} class="w-full h-full object-cover" />
           </div>
         )}
-        <h1 
-          class={cn("font-semibold truncate", conversation?.type === 'private' && "cursor-pointer hover:text-accent")} 
+        <h1
+          class={cn("font-semibold truncate", conversation?.type === 'private' && "cursor-pointer hover:text-accent")}
           onClick={() => conversation?.type === 'private' && onShowDetail?.(conversation.friendIds[0])}
         >
           {getTitle()}
         </h1>
       </header>
 
-      <div class="flex-1 overflow-auto p-4 pt-14 lg:pt-4 space-y-3">
+      <div class="flex-1 overflow-y-auto overflow-x-hidden p-4 pt-14 lg:pt-4 space-y-3">
         {conversation && messages.length >= 20 && (
           <div class="text-center py-2">
             <button onClick={() => onLoadMore?.(20, offset + 20)} class="text-xs text-accent hover:underline">查看更多历史消息</button>

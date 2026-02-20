@@ -268,18 +268,49 @@ export async function generateReplies(
 ) {
   isGenerating.value = true;
   generatingFriendIds.value = new Set(fids);
-  await Promise.allSettled(
-    fids.map(async (id) => {
-      try {
-        await generateReplyWithAgent(cid, id, msg, imgs, cb);
-      } catch (e: any) {
-        console.error(e);
+
+  // 记录开始时的消息数量，用于检测用户是否打断了对话
+  const initialMsgCount = getMessages(cid, 1, 0).length;
+
+  // 群聊时依次发送，让每个 AI 能看到之前的对话
+  // 私聊时只有一个好友，所以没有影响
+  for (const id of fids) {
+    // 检查是否有用户新消息（打断）
+    const currentMsgCount = getMessages(cid, 1, 0).length;
+    if (currentMsgCount !== initialMsgCount) {
+      console.log("[AI] 检测到用户打断，停止后续回复");
+      break;
+    }
+
+    try {
+      // 每个好友发送前，重新获取最新的消息历史（包含其他 AI 刚发的消息）
+      await generateReplyWithAgent(cid, id, msg, imgs, cb);
+    } catch (e: any) {
+      console.error(e);
+    }
+    // 从生成状态中移除当前好友
+    const s = new Set(generatingFriendIds.value);
+    s.delete(id);
+    generatingFriendIds.value = s;
+
+    // 如果是群聊（多个好友），在两个 AI 回复之间添加延迟，模拟真实对话节奏
+    if (fids.length > 1) {
+      // 延迟期间定期检查是否有用户打断
+      const delayMs = 5000 + Math.random() * 5000; // 5-10 秒随机延迟
+      const checkInterval = 500; // 每 0.5 秒检查一次
+      const checks = delayMs / checkInterval;
+      for (let i = 0; i < checks; i++) {
+        await new Promise(r => setTimeout(r, checkInterval));
+        // 检查是否有用户新消息
+        const newMsgCount = getMessages(cid, 1, 0).length;
+        if (newMsgCount !== initialMsgCount) {
+          console.log("[AI] 检测到用户打断，停止后续回复");
+          break;
+        }
       }
-      const s = new Set(generatingFriendIds.value);
-      s.delete(id);
-      generatingFriendIds.value = s;
-    }),
-  );
+    }
+  }
+
   isGenerating.value = false;
   generatingFriendIds.value = new Set();
   return { messages: [], errors: [] };

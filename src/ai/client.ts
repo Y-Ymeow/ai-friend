@@ -198,6 +198,7 @@ export async function generateAvatar(friend: Friend): Promise<string> {
 async function generateReplyWithAgent(
   cid: string,
   fid: string,
+  // 群聊时传入空字符串，让 AI 基于最新历史回复；私聊/首次回复时传入用户消息
   umsg: string,
   imgs: string[],
   onReply?: (m: Message) => void,
@@ -274,7 +275,9 @@ export async function generateReplies(
 
   // 群聊时依次发送，让每个 AI 能看到之前的对话
   // 私聊时只有一个好友，所以没有影响
-  for (const id of fids) {
+  for (let i = 0; i < fids.length; i++) {
+    const id = fids[i];
+    
     // 检查是否有用户新消息（打断）
     const currentMsgCount = getMessages(cid, 1, 0).length;
     if (currentMsgCount !== initialMsgCount) {
@@ -283,8 +286,10 @@ export async function generateReplies(
     }
 
     try {
-      // 每个好友发送前，重新获取最新的消息历史（包含其他 AI 刚发的消息）
-      await generateReplyWithAgent(cid, id, msg, imgs, cb);
+      // 第一个 AI 使用用户消息，后续 AI 使用空字符串（基于最新历史回复）
+      const userMsg = i === 0 ? msg : "";
+      const userImgs = i === 0 ? imgs : [];
+      await generateReplyWithAgent(cid, id, userMsg, userImgs, cb);
     } catch (e: any) {
       console.error(e);
     }
@@ -299,7 +304,7 @@ export async function generateReplies(
       const delayMs = 5000 + Math.random() * 5000; // 5-10 秒随机延迟
       const checkInterval = 500; // 每 0.5 秒检查一次
       const checks = delayMs / checkInterval;
-      for (let i = 0; i < checks; i++) {
+      for (let j = 0; j < checks; j++) {
         await new Promise(r => setTimeout(r, checkInterval));
         // 检查是否有用户新消息
         const newMsgCount = getMessages(cid, 1, 0).length;

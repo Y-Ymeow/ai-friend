@@ -190,7 +190,7 @@ async function generateImage(prompt: string): Promise<string> {
 }
 
 export async function generateAvatar(friend: Friend): Promise<string> {
-  const prompt = `生成${friend.name}的二次元头像。性格：${friend.personality}。外貌描述：${friend.appearance}。正面肖像，简洁背景。`;
+  const prompt = `生成${friend.name}的二次元头像。性格：${friend.personality}。外貌描述：${friend.appearance}。正面肖像，简洁背景，二次元形象。`;
   return await generateImage(prompt);
 }
 

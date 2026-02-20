@@ -150,7 +150,7 @@ export function createMessage(msg: Omit<Message, "id">): Message {
 // === 核心逻辑补充 ===
 export function getAppConfig(): AppConfig {
   const s = localStorage.getItem("app_config");
-  const def: AppConfig = { activeProvider: 'zhipu', providers: { zhipu: { provider: 'zhipu', apiKey: '', chatModel: 'GLM-4.6V-Flash' }, google: { provider: 'google', apiKey: '', chatModel: 'gemma-3-27b-it' }, groq: { provider: 'groq', apiKey: '', chatModel: 'llama-3.3-70b-versatile' }, volcengine: { provider: 'volcengine', apiKey: '', chatModel: 'doubao-pro-32k' }, modelscope: { provider: 'modelscope', apiKey: '', chatModel: 'qwen-max' } }, imageGenerationEnabled: false };
+  const def: AppConfig = { activeProvider: 'zhipu', imageProvider: 'zhipu', providers: { zhipu: { provider: 'zhipu', apiKey: '', chatModel: 'GLM-4.6V-Flash' }, google: { provider: 'google', apiKey: '', chatModel: 'gemma-3-27b-it' }, groq: { provider: 'groq', apiKey: '', chatModel: 'llama-3.3-70b-versatile' }, volcengine: { provider: 'volcengine', apiKey: '', chatModel: 'doubao-pro-32k' }, modelscope: { provider: 'modelscope', apiKey: '', chatModel: 'qwen-max' } }, imageGenerationEnabled: false };
   if (!s) return def;
   try { const p = JSON.parse(s); return { ...def, ...p, providers: { ...def.providers, ...p.providers } }; } catch { return def; }
 }
@@ -170,7 +170,7 @@ export function updateConversationLastMessage(id: string, m: string) { db!.run(`
 export function deleteFriend(id: string) { db!.run(`DELETE FROM friends WHERE id='${id}'`); saveDb(); }
 export function deleteConversation(id: string) { db!.run(`DELETE FROM messages WHERE conversation_id='${id}'; DELETE FROM conversations WHERE id='${id}';`); saveDb(); }
 export function getMemories(fid: string): Memory[] { const res = db!.exec(`SELECT id, friend_id, content, importance, type, timestamp FROM memories WHERE friend_id='${fid}' ORDER BY timestamp DESC`); if (res.length === 0) return []; return res[0].values.map((row: any) => ({ id: row[0], friendId: row[1], content: row[2], importance: row[3], type: row[4], timestamp: row[5] })); }
-export function createMemory(m: any) { const id = `mem_${Date.now()}`; db!.run(`INSERT INTO memories VALUES ('${id}', '${m.friendId}', '${m.content.replace(/'/g, "''")}', ${m.importance}, '${m.type}', ${mem.timestamp})`); saveDb(); return { ...m, id }; }
+export function createMemory(m: any) { const id = `mem_${Date.now()}`; db!.run(`INSERT INTO memories VALUES ('${id}', '${m.friendId}', '${m.content.replace(/'/g, "''")}', ${m.importance}, '${m.type}', ${m.timestamp})`); saveDb(); return { ...m, id }; }
 export function getLastMessage(cid: string): Message | null { const msgs = getMessages(cid, 1); return msgs.length > 0 ? msgs[0] : null; }
 export function deleteMemory(id: string) { db!.run(`DELETE FROM memories WHERE id='${id}'`); saveDb(); }
 export async function exportDatabase(): Promise<Blob> { const data = db!.export(); return new Blob([new Uint8Array(data)], { type: "application/octet-stream" }); }

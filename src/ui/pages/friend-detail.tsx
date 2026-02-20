@@ -12,7 +12,7 @@ import {
 } from "../../store";
 import { getMessages } from "../../db/db";
 import { generateAvatar, generateFriendState } from "../../ai/client";
-import type { Friend, Memory } from "../../types";
+import type { Memory } from "../../types";
 
 interface Props { friendId: string; onBack: () => void; }
 

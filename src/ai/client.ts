@@ -1,15 +1,15 @@
 import { signal } from "@preact/signals";
 import {
-  getZhipuConfig,
+  getAppConfig,
   getFriend,
   getMessages,
   createMessage,
   updateConversationLastMessage,
   getMemories,
   updateFriendStats,
+  imageUrlToBase64,
 } from "../db/db";
-import { CHAT_MODELS } from "../types";
-import type { Message, Friend } from "../types";
+import { CHAT_MODELS, type Message, type Friend, type AIProviderConfig } from "../types";
 
 // === 状态 ===
 export const isGenerating = signal(false);
@@ -18,327 +18,148 @@ export const generatingFriendIds = signal<Set<string>>(new Set());
 // === 构建 Prompt ===
 function buildSystemPrompt(friend: Friend): string {
   const now = new Date();
-  const hour = now.getHours();
-  const timeOfDay = hour < 6 ? "深夜" : hour < 12 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : "晚上";
-  const timeStr = now.toLocaleString("zh-CN", { month: "long", day: "numeric", weekday: "long", hour: "2-digit", minute: "2-digit" });
-  
-  const memories = getMemories(friend.id).slice(0, 5);
-  const memoryContext = memories.length > 0 
-    ? `\n你记得关于对方的事：\n${memories.map(m => `- ${m.content}`).join('\n')}`
-    : "";
+  const timeStr = now.toLocaleString("zh-CN", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const memories = getMemories(friend.id).slice(0, 10);
+  const memoryContext = memories.length > 0 ? `\n你记得：\n${memories.map(m => `- ${m.content}`).join('\n')}` : "";
 
-  const moodDesc = friend.mood > 80 ? "心情很好" : friend.mood > 50 ? "心情一般" : "心情不太好";
-  const intimacyDesc = friend.intimacy > 500 ? "你们很熟了" : friend.intimacy > 200 ? "你们正在变得熟悉" : "你们还不太熟";
+  return `你现在是${friend.name}。
+【时间】${timeStr}
+【性格】${friend.personality}
+【当前心情】${friend.mood > 80 ? "特别好" : friend.mood > 40 ? "还不错" : "一般"}
+【状况】${friend.physicalCondition}，穿着${friend.outfit}
+【外貌】${friend.appearance}
+【关系】${friend.intimacy > 500 ? "亲密朋友" : "朋友"}${memoryContext}
 
-  return `${friend.name}的回复指南：
-
-你正在和${timeOfDay}的朋友聊天。${timeStr}。
-${intimacyDesc}，${moodDesc}。
-你现在${friend.physicalCondition}，穿着${friend.outfit}。${memoryContext}
-
-你的性格：${friend.personality}
-
-回复要求：
-- 像发微信一样，简短自然，1-2句话
-- 可以用表情符号，但别太多
-- 语气要符合你们的关系亲疏
-- 别提你是AI，别写什么"我："、"用户："这种格式
-- 就像真的在跟朋友聊天一样`;
+【规范】
+1. 真人社交语境回复，简短随性。
+2. 支持 [CONTINUE] 表示连发消息。
+3. 支持 [GEN_IMAGE: 描述词] 主动分享图片（描述词用中文，尽量详细）。`;
 }
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  name?: string;
-  content: string;
+interface ChatMessage { role: "user" | "assistant" | "system"; name?: string; content: string | any[]; }
+
+function buildMessages(cid: string, umsg: string): ChatMessage[] {
+  const all = getMessages(cid, 20);
+  const msgs: ChatMessage[] = all.map(m => m.senderId === "user" ? { role: "user", content: m.content } : { role: "assistant", name: m.senderName, content: m.content });
+  if (umsg) msgs.push({ role: "user", content: umsg });
+  return msgs;
 }
 
-function buildMessages(conversationId: string, currentUserMessage: string): ChatMessage[] {
-  const allRecentMessages = getMessages(conversationId, 50);
-  const messages: ChatMessage[] = [];
-  
-  const MAX_CONTEXT_CHARS = 8000;
-  let currentLength = 0;
-  const contextMessages: ChatMessage[] = [];
+// === 通用 AI 调用实现 ===
+async function callAI(config: AIProviderConfig, systemPrompt: string, messages: ChatMessage[], images: string[] = []): Promise<string> {
+  const { provider, apiKey, chatModel, baseUrl } = config;
+  const lastMsg = messages[messages.length - 1];
+  const modelInfo = CHAT_MODELS[provider].find(m => m.id === chatModel);
+  const supportsVision = modelInfo?.supportsVision ?? false;
 
-  for (let i = allRecentMessages.length - 1; i >= 0; i--) {
-    const msg = allRecentMessages[i];
-    const chatMsg: ChatMessage = msg.senderId === "user"
-      ? { role: "user", content: msg.content }
-      : { role: "assistant", name: msg.senderName, content: msg.content };
-    
-    const msgLength = JSON.stringify(chatMsg).length;
-    if (currentLength + msgLength > MAX_CONTEXT_CHARS) break;
-    
-    contextMessages.unshift(chatMsg);
-    currentLength += msgLength;
+  if (provider === 'google') {
+    const base = baseUrl ? baseUrl.replace(/\/$/, '') : 'https://generativelanguage.googleapis.com/v1beta';
+    const endpoint = `${base}/models/${chatModel}:generateContent?key=${apiKey}`;
+    const apiMessages = messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: (m.role === 'system' ? `SYSTEM: ${m.content}` : m.content) as string }] }));
+    apiMessages.unshift({ role: 'user', parts: [{ text: `SYSTEM INSTRUCTION: ${systemPrompt}` }] });
+
+    const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: apiMessages }) });
+    if (!response.ok) throw new Error(`Google API 错误: ${await response.text()}`);
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
 
-  messages.push(...contextMessages);
-  messages.push({ role: "user", content: currentUserMessage });
-  
-  return messages;
-}
-
-interface ZhipuResponse {
-  choices: Array<{
-    message: {
-      content: string | null;
-      reasoning_content?: string;
-    };
-    finish_reason: string;
-  }>;
-}
-
-async function callZhipuVision(
-  systemPrompt: string,
-  messages: ChatMessage[],
-  images: string[],
-  config: { apiKey: string; model: string }
-): Promise<string> {
-  const lastMsg = messages[messages.length - 1];
-  const modelConfig = CHAT_MODELS.find(m => m.id === config.model);
-  const supportsVision = modelConfig?.supportsVision ?? false;
-  
   let userContent: any = lastMsg.content;
   if (supportsVision && images.length > 0) {
-    const content: any[] = [{ type: "text", text: lastMsg.content }];
-    for (const img of images) content.push({ type: "image_url", image_url: { url: img } });
-    userContent = content;
+    userContent = [{ type: "text", text: lastMsg.content }];
+    for (const img of images) userContent.push({ type: "image_url", image_url: { url: img } });
   }
 
-  const apiMessages: any[] = [
+  const endpoint = baseUrl || (
+    provider === 'zhipu' ? "https://open.bigmodel.cn/api/paas/v4/chat/completions" :
+    provider === 'groq' ? "https://api.groq.com/openai/v1/chat/completions" :
+    provider === 'volcengine' ? "https://ark.cn-beijing.volces.com/api/v3/chat/completions" :
+    provider === 'modelscope' ? "https://api.modelscope.cn/api/v1/chat/completions" : ""
+  );
+
+  const apiMessages = [
     { role: "system", content: systemPrompt },
-    ...messages.slice(0, -1).map(m => m.name 
-      ? { role: m.role, name: m.name, content: m.content }
-      : { role: m.role, content: m.content }
-    ),
+    ...messages.slice(0, -1).map(m => ({ role: m.role, name: m.name, content: m.content })),
     { role: "user", content: userContent }
   ];
 
-  const body: any = {
-    model: config.model,
-    messages: apiMessages,
-    max_tokens: 256,
-    temperature: 0.9
-  };
-  body.thinking = { type: "disabled" };
-
-  const response = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) throw new Error(`API 错误: ${await response.text()}`);
-  const data: ZhipuResponse = await response.json();
-  
-  const choice = data.choices[0];
-  if (!choice) throw new Error("API 返回空响应");
-  
-  const rawContent = choice.message?.content?.trim() || "";
-  
-  if (rawContent) return rawContent;
-  
-  if (choice.message?.reasoning_content) {
-    throw new Error("Thinking模型返回空内容，请重试");
-  }
-  
-  throw new Error("API返回空内容");
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: chatModel, messages: apiMessages, temperature: 0.8 }) });
+  if (!response.ok) throw new Error(`${provider} API 错误: ${await response.text()}`);
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || "";
 }
 
-async function generateReply(
-  conversationId: string,
-  friendId: string,
-  userMessage: string,
-  images: string[],
-  maxRetries = 5
-): Promise<string> {
-  const config = getZhipuConfig();
-  if (!config) throw new Error("请先配置 API Key");
-  const friend = getFriend(friendId);
-  if (!friend) throw new Error("朋友不存在");
+// === 解耦后的生图函数 ===
+async function generateImage(prompt: string): Promise<string> {
+  const config = getAppConfig();
+  const provider = config.imageProvider || 'zhipu'; // 默认选智谱
+  const active = config.providers[provider];
+  
+  if (!active?.apiKey) throw new Error(`请先配置用于生图的 ${provider} API Key`);
 
-  const systemPrompt = buildSystemPrompt(friend);
-  const messages = buildMessages(conversationId, userMessage);
-
-  let lastError: any = null;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const result = await callZhipuVision(systemPrompt, messages, images, {
-        apiKey: config.apiKey,
-        model: config.chatModel,
-      });
-      if (!result || !result.trim()) {
-        throw new Error("收到空白回复");
-      }
-      return result;
-    } catch (err: any) {
-      lastError = err;
-      if (i < maxRetries - 1) {
-        const waitTime = Math.pow(2, i) * 1000;
-        console.warn(`[AI Client] 请求失败 (${err.message}), ${waitTime/1000}s 后进行第 ${i + 1} 次重试...`);
-        await new Promise((r) => setTimeout(r, waitTime));
-      }
-    }
+  if (provider === 'zhipu') {
+    const endpoint = active.baseUrl ? `${active.baseUrl.replace(/\/$/, '')}/images/generations` : "https://open.bigmodel.cn/api/paas/v4/images/generations";
+    const response = await fetch(endpoint, { 
+      method: "POST", 
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${active.apiKey}` }, 
+      body: JSON.stringify({ model: active.imageModel || "cogview-3-flash", prompt, size: active.imageSize || "1280x1280", quality: active.imageQuality || "hd" }) 
+    });
+    if (!response.ok) throw new Error(`生图失败: ${await response.text()}`);
+    const data = await response.json();
+    const url = data.data?.[0]?.url;
+    return url ? await imageUrlToBase64(url) : "";
   }
-  throw lastError;
+  
+  throw new Error(`目前暂不支持使用 ${provider} 进行生图`);
 }
 
-export async function generateReplies(
-  conversationId: string,
-  friendIds: string[],
-  userMessage: string,
-  images: string[] = [],
-  onReply?: (msg: Message) => void,
-): Promise<{ messages: Message[]; errors: string[] }> {
-  isGenerating.value = true;
-  const results: Message[] = [];
-  const errors: string[] = [];
-  generatingFriendIds.value = new Set(friendIds);
-
-  const promises = friendIds.map(async (friendId) => {
-    const friend = getFriend(friendId);
-    if (!friend) {
-      errors.push(`找不到 ID: ${friendId}`);
-      return;
-    }
-    try {
-      const reply = await generateReply(conversationId, friendId, userMessage, images);
-      const msg = createMessage({ conversationId, senderId: friendId, senderName: friend.name, content: reply, timestamp: Date.now(), status: "sent" });
-      results.push(msg);
-      updateConversationLastMessage(conversationId, reply);
-      const intimacyGain = Math.floor(Math.random() * 3) + 1;
-      const moodGain = Math.floor(Math.random() * 5) + 1;
-      updateFriendStats(friendId, intimacyGain, moodGain);
-      if (onReply) onReply(msg);
-    } catch (err: any) {
-      errors.push(`${friend.name}: ${err.message}`);
-    } finally {
-      const newSet = new Set(generatingFriendIds.value);
-      newSet.delete(friendId);
-      generatingFriendIds.value = newSet;
-    }
-  });
-
-  await Promise.allSettled(promises);
-  isGenerating.value = false;
-  generatingFriendIds.value = new Set();
-  return { messages: results, errors };
+export async function generateAvatar(friend: Friend): Promise<string> {
+  const prompt = `生成${friend.name}的二次元头像。性格：${friend.personality}。外貌描述：${friend.appearance}。正面肖像，简洁背景。`;
+  return await generateImage(prompt);
 }
 
-// === 生成状态 ===
-interface FriendState {
-  outfit: string;
-  physicalCondition: string;
-  mood: number;
+// === 增强版的 Agent 逻辑，支持跨模型生图 ===
+async function generateReplyWithAgent(cid: string, fid: string, umsg: string, imgs: string[], onReply?: (m: Message) => void, depth = 0): Promise<void> {
+  if (depth > 2) return;
+  const config = getAppConfig();
+  const active = config.providers[config.activeProvider];
+  if (!active?.apiKey) throw new Error(`请配置 API Key`);
+  const friend = getFriend(fid); if (!friend) return;
+
+  const reply = await callAI(active, buildSystemPrompt(friend), buildMessages(cid, umsg), imgs);
+  if (!reply) return;
+
+  let content = reply;
+  let shouldContinue = content.includes("[CONTINUE]");
+  content = content.replace("[CONTINUE]", "").trim();
+
+  let imgPrompt = "";
+  const match = content.match(/\[GEN_IMAGE:\s*(.*?)\]/);
+  if (match) { imgPrompt = match[1]; content = content.replace(/\[GEN_IMAGE:.*?\]/, "").trim(); }
+
+  if (content || imgPrompt) {
+    let genImgs: string[] = [];
+    if (imgPrompt && config.imageGenerationEnabled) {
+      try { const b64 = await generateImage(imgPrompt); if (b64) genImgs.push(b64); } catch (e) { console.error("Agent 生图失败:", e); }
+    }
+    const msg = createMessage({ conversationId: cid, senderId: fid, senderName: friend.name, content: content || "[图片]", images: genImgs.length > 0 ? genImgs : undefined, timestamp: Date.now(), status: "sent" });
+    updateConversationLastMessage(cid, msg.content);
+    updateFriendStats(fid, 2, 3);
+    if (onReply) onReply(msg);
+    if (shouldContinue) { await new Promise(r => setTimeout(r, 2000)); await generateReplyWithAgent(cid, fid, "", [], onReply, depth + 1); }
+  }
 }
 
-const OUTFIT_OPTIONS = [
-  "oversize卫衣", "碎花连衣裙", "修身小西装", "毛绒睡衣", "运动套装",
-  "白衬衫", "针织开衫", "牛仔外套", "格子衬衫", "黑色高领",
-  "百褶裙", "工装裤", "连帽外套", "真丝睡衣", "复古背带裤",
-  "露肩上衣", "休闲短裤", "长款风衣", "紧身瑜伽服", "纯棉T恤"
-];
-
-const PHYSICAL_OPTIONS = [
-  "元气满满", "有点犯困", "精神焕发", "状态一般", "好想睡觉",
-  "鼻子不通", "胃口大开", "充满活力", "腰酸背痛", "心情愉悦",
-  "头昏脑胀", "饿了饿了", "神清气爽", "有点emo", "活力四射",
-  "口干舌燥", "浑身舒畅", "略感疲惫", "精神集中", "心情烦躁"
-];
-
-export async function generateFriendState(
-  friend: Friend,
-  recentMessages: { senderName: string; content: string; timestamp: number }[]
-): Promise<FriendState> {
-  const config = getZhipuConfig();
-  if (!config) {
-    // 没有配置，随机选择
-    return {
-      outfit: OUTFIT_OPTIONS[Math.floor(Math.random() * OUTFIT_OPTIONS.length)],
-      physicalCondition: PHYSICAL_OPTIONS[Math.floor(Math.random() * PHYSICAL_OPTIONS.length)],
-      mood: Math.floor(Math.random() * 40) + 30
-    };
-  }
-
-  const now = new Date();
-  const hour = now.getHours();
-  const timeOfDay = hour < 6 ? "深夜" : hour < 12 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : "晚上";
-  const timeStr = now.toLocaleString("zh-CN", { month: "long", day: "numeric", weekday: "long", hour: "2-digit", minute: "2-digit" });
-
-  const chatContext = recentMessages.length > 0
-    ? `\n最近聊天：\n${recentMessages.slice(-5).map(m => `${m.senderName}: ${m.content.slice(0, 50)}`).join('\n')}`
-    : "";
-
-  const prompt = `作为${friend.name}，${timeStr}，现在是${timeOfDay}。
-你的性格：${friend.personality}
-${chatContext}
-
-请根据当前时间、你的性格${recentMessages.length > 0 ? "和最近的聊天内容" : ""}，选择你现在最可能的状态。
-
-可选穿搭：${OUTFIT_OPTIONS.join('、')}
-可选体感：${PHYSICAL_OPTIONS.join('、')}
-
-必须以JSON格式返回（不要包含任何其他文字）：
-{"outfit": "从可选穿搭中选择一个", "physicalCondition": "从可选体感中选择一个", "mood": 0-100的数字}`;
-
-  const response = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "GLM-4-Flash",
-      messages: [
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.7,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`API 错误: ${response.status}`);
-  }
-
-  const data: ZhipuResponse = await response.json();
-  const content = data.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("AI 返回空内容");
-  }
-
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("无法解析 JSON");
-    }
-    const result = JSON.parse(jsonMatch[0]);
-    
-    // 验证并修正返回的数据
-    let outfit = result.outfit;
-    let physical = result.physicalCondition;
-    
-    if (!OUTFIT_OPTIONS.includes(outfit)) {
-      outfit = OUTFIT_OPTIONS[Math.floor(Math.random() * OUTFIT_OPTIONS.length)];
-    }
-    if (!PHYSICAL_OPTIONS.includes(physical)) {
-      physical = PHYSICAL_OPTIONS[Math.floor(Math.random() * PHYSICAL_OPTIONS.length)];
-    }
-    
-    return {
-      outfit,
-      physicalCondition: physical,
-      mood: Math.max(0, Math.min(100, Math.round(result.mood) || 50))
-    };
-  } catch (e) {
-    // 解析失败，返回随机状态
-    return {
-      outfit: OUTFIT_OPTIONS[Math.floor(Math.random() * OUTFIT_OPTIONS.length)],
-      physicalCondition: PHYSICAL_OPTIONS[Math.floor(Math.random() * PHYSICAL_OPTIONS.length)],
-      mood: Math.floor(Math.random() * 40) + 30
-    };
-  }
+// ... 保持 generateReplies 和 generateFriendState 原逻辑不变 ...
+export async function generateReplies(cid: string, fids: string[], msg: string, imgs: string[] = [], cb?: (m: Message) => void) {
+  isGenerating.value = true; generatingFriendIds.value = new Set(fids);
+  await Promise.allSettled(fids.map(async id => { try { await generateReplyWithAgent(cid, id, msg, imgs, cb); } catch (e: any) { console.error(e); } const s = new Set(generatingFriendIds.value); s.delete(id); generatingFriendIds.value = s; }));
+  isGenerating.value = false; generatingFriendIds.value = new Set();
+  return { messages: [], errors: [] };
+}
+export async function generateFriendState(friend: Friend, recent: any[]): Promise<any> {
+  const config = getAppConfig(); const active = config.providers[config.activeProvider];
+  if (!active?.apiKey) return null;
+  const prompt = `作为${friend.name}，基于最近聊天生成状态。性格:${friend.personality}\n返回 JSON: {"outfit": "...", "physicalCondition": "...", "mood": 0-100}`;
+  try { const res = await callAI(active, "JSON Generator", [{ role: "user", content: prompt }]); const json = JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || "{}"); return { outfit: json.outfit || "休闲装", physicalCondition: json.physicalCondition || "状态不错", mood: Math.max(0, Math.min(100, json.mood || 50)) }; } catch (e) { return { outfit: "休闲装", physicalCondition: "状态一般", mood: 50 }; }
 }

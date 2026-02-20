@@ -3,361 +3,260 @@ import { useState, useEffect } from "preact/hooks";
 import { Button } from "../components/button";
 import { Card } from "../components/card";
 import { Badge } from "../components/badge";
-import { ScrollArea } from "../components/scroll-area";
 import {
   friends,
   updateFriend,
   fetchMemories,
   addMemory,
   removeMemory,
-  generateFriendState,
 } from "../../store";
-import { generateAvatar, getMessages } from "../../db/db";
+import { getMessages } from "../../db/db";
+import { generateAvatar, generateFriendState } from "../../ai/client";
 import type { Friend, Memory } from "../../types";
 
-interface Props {
-  friendId: string;
-  onBack: () => void;
-}
+interface Props { friendId: string; onBack: () => void; }
 
-export const FriendDetailPage: FunctionalComponent<Props> = ({
-  friendId,
-  onBack,
-}) => {
-  const [friend, setFriend] = useState<Friend | null>(null);
+export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack }) => {
+  // 使用 .value 确保响应式
+  const friend = friends.value.find((f) => f.id === friendId);
+  
   const [memories, setMemories] = useState<Memory[]>([]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [newMemory, setNewMemory] = useState("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
-
-  const refreshData = () => {
-    const f = friends.value.find((f) => f.id === friendId);
-    if (f) {
-      setFriend({ ...f });
-      setMemories(fetchMemories(friendId));
-    }
-  };
+  const [isRefreshingState, setIsRefreshingState] = useState(false);
+  const [newMemory, setNewMemory] = useState("");
+  
+  // 编辑状态
+  const [isEditingPersonality, setIsEditingPersonality] = useState(false);
+  const [personalityText, setPersonalityText] = useState("");
+  const [isEditingAppearance, setIsEditingAppearance] = useState(false);
+  const [appearanceText, setAppearanceText] = useState("");
 
   useEffect(() => {
-    refreshData();
-  }, [friendId, friends.value]);
-
-  if (!friend) return <div class="p-8 text-center text-muted">加载中...</div>;
-
-  const handleUpdate = (updates: Partial<Friend>) => {
-    updateFriend(friendId, updates);
-  };
-
-  const handleAddMemory = () => {
-    if (!newMemory.trim()) return;
-    addMemory({
-      friendId,
-      content: newMemory.trim(),
-      importance: 5,
-      type: "fact",
-      timestamp: Date.now(),
-    });
-    setNewMemory("");
-    refreshData();
-  };
-
-  const handleRemoveMemory = (id: string) => {
-    removeMemory(id);
-    refreshData();
-  };
-
-  const [isRefreshingState, setIsRefreshingState] = useState(false);
-
-  const refreshState = async () => {
-    setIsRefreshingState(true);
-    try {
-      // 获取与该好友的最近聊天记录
-      const conversations = await import("../../store").then(m => m.conversations.value);
-      const conv = conversations.find(
-        c => c.type === "private" && c.friendIds.length === 1 && c.friendIds[0] === friendId
-      );
-      
-      let recentMessages: { senderName: string; content: string; timestamp: number }[] = [];
-      if (conv) {
-        const msgs = getMessages(conv.id, 10, 0);
-        recentMessages = msgs.map(m => ({
-          senderName: m.senderName,
-          content: m.content,
-          timestamp: m.timestamp
-        }));
-      }
-      
-      // 调用 AI 生成状态
-      const state = await generateFriendState(friend, recentMessages);
-      
-      handleUpdate({
-        outfit: state.outfit,
-        physicalCondition: state.physicalCondition,
-        mood: state.mood,
-        lastStateUpdate: Date.now(),
-      });
-    } catch (err) {
-      console.error("刷新状态失败:", err);
-      // 失败时使用随机状态
-      const outfits = [
-        "oversize卫衣", "碎花连衣裙", "修身小西装", "毛绒睡衣", "运动套装",
-        "白衬衫", "针织开衫", "牛仔外套", "格子衬衫", "黑色高领",
-        "百褶裙", "工装裤", "连帽外套", "真丝睡衣", "复古背带裤",
-        "露肩上衣", "休闲短裤", "长款风衣", "紧身瑜伽服", "纯棉T恤",
-      ];
-      const physicals = [
-        "元气满满", "有点犯困", "精神焕发", "状态一般", "好想睡觉",
-        "鼻子不通", "胃口大开", "充满活力", "腰酸背痛", "心情愉悦",
-        "头昏脑胀", "饿了饿了", "神清气爽", "有点emo", "活力四射",
-        "口干舌燥", "浑身舒畅", "略感疲惫", "精神集中", "心情烦躁",
-      ];
-      handleUpdate({
-        outfit: outfits[Math.floor(Math.random() * outfits.length)],
-        physicalCondition: physicals[Math.floor(Math.random() * physicals.length)],
-        lastStateUpdate: Date.now(),
-      });
-    } finally {
-      setIsRefreshingState(false);
+    if (friendId) { setMemories(fetchMemories(friendId)); }
+    if (friend) { 
+      setPersonalityText(friend.personality); 
+      setAppearanceText(friend.appearance); 
     }
+  }, [friendId, friend]);
+
+  if (!friend) return <div class="p-4 text-center"><p>找不到朋友信息</p><Button onClick={onBack} class="mt-4">返回</Button></div>;
+
+  const handleUpdateField = (field: 'personality' | 'appearance', value: string) => {
+    updateFriend(friendId, { [field]: value });
+    if (field === 'personality') setIsEditingPersonality(false);
+    if (field === 'appearance') setIsEditingAppearance(false);
   };
 
   const handleGenerateAvatar = async () => {
-    if (!friend || isGeneratingAvatar) return;
+    if (!confirm("确定重新生成头像吗？这将参考你的“外貌描述”设定。")) return;
     setIsGeneratingAvatar(true);
+    try { const url = await generateAvatar(friend); updateFriend(friendId, { avatar: url }); }
+    catch (err: any) { alert("生成失败: " + err.message); }
+    finally { setIsGeneratingAvatar(false); }
+  };
+
+  const handleRefreshState = async () => {
+    setIsRefreshingState(true);
     try {
-      const avatarUrl = await generateAvatar(friend);
-      handleUpdate({ avatar: avatarUrl });
-      refreshData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "生成头像失败");
-    } finally {
-      setIsGeneratingAvatar(false);
+      const msgs = getMessages(friendId, 10);
+      const recent = msgs.map(m => ({ senderName: m.senderName, content: m.content, timestamp: m.timestamp }));
+      const newState = await generateFriendState(friend, recent);
+      if (newState) updateFriend(friendId, { 
+        outfit: newState.outfit, 
+        physicalCondition: newState.physicalCondition, 
+        mood: newState.mood, 
+        lastStateUpdate: Date.now() 
+      });
     }
+    catch (err: any) { alert("刷新失败: " + err.message); }
+    finally { setIsRefreshingState(false); }
   };
 
   return (
-    <div class="h-full flex flex-col bg-background text-foreground">
-      {/* 磨砂感头部 */}
-      <header class="flex-shrink-0 h-16 px-6 flex items-center gap-4 border-b border-border bg-surface/50 backdrop-blur-md sticky top-0 z-10">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onBack}
-          class="rounded-full"
-        >
-          <span class="text-xl">←</span>
-        </Button>
-        <div class="flex-1">
-          <h1 class="font-bold text-lg leading-none">{friend.name}</h1>
-          <p class="text-xs text-muted mt-1">资料与状态管理</p>
+    <div class="h-full flex flex-col bg-background text-sm">
+      <header class="h-12 px-4 flex items-center justify-between border-b border-border bg-background flex-shrink-0 sticky top-0 z-10">
+        <div class="flex items-center gap-3">
+          <button class="text-xl text-muted hover:text-white" onClick={onBack}>←</button>
+          <h1 class="font-semibold">朋友资料</h1>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={refreshState}
-          disabled={isRefreshingState}
-          class="rounded-full gap-2 px-4"
-        >
-          {isRefreshingState ? "⏳ 生成中..." : "✨ 刷新状态"}
-        </Button>
       </header>
 
-      <ScrollArea class="flex-1 px-6 py-8">
-        <div class="max-w-2xl mx-auto space-y-10 pb-12">
-          {/* 核心状态看板 */}
-          <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="col-span-1 md:col-span-2 flex flex-col items-center py-4 mb-4">
-              <div class="relative group">
-                <div class="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent/40 flex items-center justify-center text-3xl font-bold shadow-lg shadow-accent/20 overflow-hidden">
-                  {friend.avatar ? (
-                    <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" />
-                  ) : (
-                    friend.name.charAt(0)
-                  )}
-                </div>
-                <button
-                  onClick={handleGenerateAvatar}
-                  disabled={isGeneratingAvatar}
-                  class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-accent text-white text-xs flex items-center justify-center shadow-md hover:bg-accent/80 transition-opacity opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                  title="生成头像"
-                >
-                  {isGeneratingAvatar ? "⏳" : "🎨"}
-                </button>
-              </div>
-              <Badge variant="outline" class="px-3 py-1 mt-3">
-                亲密度 Lv.{(friend.intimacy / 100).toFixed(0)}
-              </Badge>
-            </div>
-
-            <Card class="p-5 bg-surface/30 border-none shadow-sm space-y-3">
-              <div class="flex justify-between items-center">
-                <span class="text-xs font-bold text-muted uppercase tracking-wider">
-                  今日心情
-                </span>
-                <span class="text-sm font-mono text-accent">
-                  {friend.mood}%
-                </span>
-              </div>
-              <div class="h-1.5 bg-background rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-accent transition-all duration-700"
-                  style={{ width: `${friend.mood}%` }}
-                />
-              </div>
-            </Card>
-
-            <Card class="p-5 bg-surface/30 border-none shadow-sm space-y-3">
-              <div class="flex justify-between items-center">
-                <span class="text-xs font-bold text-muted uppercase tracking-wider">
-                  羁绊等级
-                </span>
-                <span class="text-sm font-mono text-warning">
-                  {friend.intimacy}/1000
-                </span>
-              </div>
-              <div class="h-1.5 bg-background rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-warning transition-all duration-700"
-                  style={{ width: `${(friend.intimacy / 1000) * 100}%` }}
-                />
-              </div>
-            </Card>
-
-            <div class="grid grid-cols-2 gap-4 col-span-1 md:col-span-2">
-              <div class="p-4 rounded-2xl bg-surface/20 border border-border/50">
-                <div class="text-[10px] text-muted font-bold uppercase mb-1">
-                  今日穿搭
-                </div>
-                <div class="text-sm font-medium">{friend.outfit}</div>
-              </div>
-              <div class="p-4 rounded-2xl bg-surface/20 border border-border/50">
-                <div class="text-[10px] text-muted font-bold uppercase mb-1">
-                  当前体感
-                </div>
-                <div class="text-sm font-medium">
-                  {friend.physicalCondition}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 自动回复设置 */}
-          <section class="space-y-3">
-            <h3 class="text-sm font-bold px-1 text-muted uppercase tracking-widest">
-              系统设置
-            </h3>
-            <Card class="p-5 flex items-center justify-between bg-surface/40 border-border/50">
-              <div>
-                <div class="font-semibold">定时主动联系</div>
-                <div class="text-xs text-muted mt-0.5">
-                  静默超过 {friend.autoReply.idleMinutes} 分钟后触发
-                </div>
-              </div>
-              <button
-                onClick={() =>
-                  handleUpdate({
-                    autoReply: {
-                      ...friend.autoReply,
-                      enabled: !friend.autoReply.enabled,
-                    },
-                  })
-                }
-                class={`w-12 h-6 rounded-full transition-all duration-300 relative ${friend.autoReply.enabled ? "bg-accent" : "bg-muted"}`}
-              >
-                <div
-                  class={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${friend.autoReply.enabled ? "left-7" : "left-1"}`}
-                />
-              </button>
-            </Card>
-          </section>
-
-          {/* 记忆宫殿 */}
-          <section class="space-y-4">
-            <div class="flex items-center justify-between px-1">
-              <h3 class="text-sm font-bold text-muted uppercase tracking-widest">
-                记忆宫殿
-              </h3>
-              <Badge variant="secondary" class="font-mono">
-                {memories.length}
-              </Badge>
-            </div>
-
-            <div class="grid gap-3">
-              {memories.map((m) => (
-                <div
-                  key={m.id}
-                  class="p-4 rounded-2xl bg-surface/40 border border-border/50 flex items-start gap-4 group relative hover:border-accent/30 transition-colors"
-                >
-                  <div class="w-2 h-2 rounded-full bg-accent/40 mt-1.5 flex-shrink-0" />
-                  <div class="flex-1 text-sm leading-relaxed text-foreground/90">
-                    {m.content}
-                  </div>
-                  <button
-                    onClick={() => handleRemoveMemory(m.id)}
-                    class="opacity-0 group-hover:opacity-100 text-danger text-xs px-2 py-1 hover:bg-danger/10 rounded-md transition-all"
-                  >
-                    遗忘
-                  </button>
-                </div>
-              ))}
-
-              <div class="flex gap-2 mt-4">
-                <input
-                  value={newMemory}
-                  onInput={(e) =>
-                    setNewMemory((e.target as HTMLInputElement).value)
-                  }
-                  onKeyDown={(e) => e.key === "Enter" && handleAddMemory()}
-                  placeholder="记录一件对他而言重要的事..."
-                  class="flex-1 bg-surface/60 border border-border/50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
-                />
-                <Button onClick={handleAddMemory} class="rounded-xl px-6">
-                  记录
-                </Button>
-              </div>
-            </div>
-          </section>
-
-          {/* 性格核心 */}
-          <section class="space-y-3 pb-10">
-            <div class="flex items-center justify-between px-1">
-              <h3 class="text-sm font-bold text-muted uppercase tracking-widest">
-                性格核心
-              </h3>
-              <button
-                class="text-xs text-accent font-medium hover:underline"
-                onClick={() => setIsEditing(!isEditing)}
-              >
-                {isEditing ? "锁定并保存" : "解除锁定"}
-              </button>
-            </div>
-            <Card
-              class={
-                "p-5 bg-surface/20 border-border/30 transition-all" +
-                (isEditing && "ring-2 ring-accent/30 bg-surface/40")
-              }
-            >
-              {isEditing ? (
-                <textarea
-                  value={friend.personality}
-                  onInput={(e) =>
-                    handleUpdate({
-                      personality: (e.target as HTMLTextAreaElement).value,
-                    })
-                  }
-                  class="w-full bg-transparent border-none outline-none text-sm leading-relaxed resize-none font-medium text-foreground"
-                  rows={6}
-                  placeholder="用一段话描述这个朋友的性格、背景和说话习惯..."
-                />
+      <div class="p-4 space-y-6 max-w-2xl mx-auto w-full pb-20">
+        {/* 头像与基础信息 */}
+        <div class="flex flex-col items-center space-y-4 py-4">
+          <div class="relative">
+            <div class="w-32 h-32 rounded-full overflow-hidden ring-4 ring-accent/20 shadow-2xl bg-surface">
+              {friend.avatar ? (
+                <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" />
               ) : (
-                <div class="text-sm leading-relaxed text-muted italic whitespace-pre-wrap">
-                  {friend.personality || "暂无性格描述"}
+                <div class="w-full h-full flex items-center justify-center text-4xl font-bold text-muted">
+                  {friend.name.charAt(0)}
                 </div>
               )}
-            </Card>
-          </section>
+            </div>
+            <button 
+              onClick={handleGenerateAvatar} 
+              disabled={isGeneratingAvatar} 
+              class="absolute bottom-0 right-0 w-10 h-10 bg-accent text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all disabled:opacity-50 border-4 border-background"
+            >
+              {isGeneratingAvatar ? "..." : "✨"}
+            </button>
+          </div>
+          <div class="text-center">
+            <h2 class="text-3xl font-bold tracking-tight">{friend.name}</h2>
+            <div class="flex gap-2 mt-3 justify-center">
+              <Badge variant="outline" class="px-3">亲密度 {friend.intimacy}</Badge>
+              <Badge class={friend.mood > 70 ? "bg-success px-3" : friend.mood > 30 ? "bg-warning px-3" : "bg-danger px-3"}>
+                心情 {friend.mood}
+              </Badge>
+            </div>
+          </div>
         </div>
-      </ScrollArea>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 实时状态卡片 */}
+          <Card class="p-5 space-y-4 border-accent/10 bg-accent/[0.02]">
+            <div class="flex justify-between items-center border-b border-border pb-2">
+              <h3 class="font-bold flex items-center gap-2 text-accent">
+                <span>📍</span> 实时状态
+              </h3>
+              <button 
+                onClick={handleRefreshState} 
+                disabled={isRefreshingState} 
+                class="text-[10px] px-2 py-1 rounded-md bg-accent text-white hover:bg-accent/80 transition-colors shadow-sm"
+              >
+                {isRefreshingState ? "刷新中..." : "AI 刷新"}
+              </button>
+            </div>
+            <div class="space-y-3">
+              <div class="flex justify-between items-center bg-background/50 p-2.5 rounded-xl border border-border/50">
+                <span class="text-muted text-xs">今日穿搭</span>
+                <span class="font-bold text-sm">{friend.outfit}</span>
+              </div>
+              <div class="flex justify-between items-center bg-background/50 p-2.5 rounded-xl border border-border/50">
+                <span class="text-muted text-xs">当前体感</span>
+                <span class="font-bold text-sm">{friend.physicalCondition}</span>
+              </div>
+              <p class="text-[10px] text-muted text-right italic pt-1">
+                更新于 {new Date(friend.lastStateUpdate).toLocaleTimeString()}
+              </p>
+            </div>
+          </Card>
+
+          {/* 性格设定卡片 */}
+          <Card class="p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-border pb-2">
+              <h3 class="font-bold flex items-center gap-2">
+                <span>📝</span> 性格设定
+              </h3>
+              {!isEditingPersonality && (
+                <button 
+                  onClick={() => setIsEditingPersonality(true)} 
+                  class="text-[10px] px-2 py-1 rounded-md bg-surface-hover text-accent border border-accent/20 hover:bg-accent/5 transition-colors font-bold"
+                >
+                  修改
+                </button>
+              )}
+            </div>
+            {isEditingPersonality ? (
+              <div class="space-y-3">
+                <textarea 
+                  value={personalityText} 
+                  onInput={e => setPersonalityText((e.target as HTMLTextAreaElement).value)} 
+                  class="w-full p-3 bg-surface rounded-xl border border-accent/30 focus:ring-2 focus:ring-accent/20 focus:outline-none text-xs h-32 resize-none"
+                />
+                <div class="flex justify-end gap-3">
+                  <button onClick={() => setIsEditingPersonality(false)} class="text-xs text-muted">取消</button>
+                  <button onClick={() => handleUpdateField('personality', personalityText)} class="text-xs bg-accent text-white px-3 py-1 rounded-lg">保存</button>
+                </div>
+              </div>
+            ) : (
+              <p class="text-xs text-muted leading-relaxed italic p-2 bg-surface/30 rounded-lg border border-dashed border-border">
+                "{friend.personality}"
+              </p>
+            )}
+          </Card>
+        </div>
+
+        {/* 外貌特征卡片 */}
+        <Card class="p-5 space-y-4">
+          <div class="flex justify-between items-center border-b border-border pb-2">
+            <h3 class="font-bold flex items-center gap-2">
+              <span>👗</span> 外貌描述
+            </h3>
+            {!isEditingAppearance && (
+              <button 
+                onClick={() => setIsEditingAppearance(true)} 
+                class="text-[10px] px-2 py-1 rounded-md bg-surface-hover text-accent border border-accent/20 hover:bg-accent/5 transition-colors font-bold"
+              >
+                修改
+              </button>
+            )}
+          </div>
+          {isEditingAppearance ? (
+            <div class="space-y-3">
+              <textarea 
+                value={appearanceText} 
+                onInput={e => setAppearanceText((e.target as HTMLTextAreaElement).value)} 
+                class="w-full p-3 bg-surface rounded-xl border border-accent/30 focus:ring-2 focus:ring-accent/20 focus:outline-none text-xs h-32 resize-none"
+              />
+              <div class="flex justify-end gap-3">
+                <button onClick={() => setIsEditingAppearance(false)} class="text-xs text-muted">取消</button>
+                <button onClick={() => handleUpdateField('appearance', appearanceText)} class="text-xs bg-accent text-white px-3 py-1 rounded-lg">保存</button>
+              </div>
+            </div>
+          ) : (
+            <p class="text-xs text-muted leading-relaxed p-2">
+              {friend.appearance || "暂无描述"}
+            </p>
+          )}
+        </Card>
+
+        {/* 记忆碎片卡片 */}
+        <div class="space-y-4">
+          <h3 class="font-bold px-1 flex items-center gap-2">
+            <span>🧠</span> 记忆碎片 ({memories.length})
+          </h3>
+          <Card class="p-5 space-y-5">
+            <div class="flex gap-2">
+              <input 
+                type="text" 
+                value={newMemory} 
+                onInput={e => setNewMemory((e.target as HTMLInputElement).value)} 
+                placeholder="添加一条记忆..." 
+                class="flex-1 px-3 py-2 bg-surface rounded-xl border border-border text-xs focus:outline-none" 
+              />
+              <Button size="sm" onClick={() => {
+                if (newMemory.trim()) {
+                  addMemory({ friendId, content: newMemory.trim(), importance: 5, type: "fact", timestamp: Date.now() });
+                  setNewMemory("");
+                  setMemories(fetchMemories(friendId));
+                }
+              }}>记录</Button>
+            </div>
+            <div class="space-y-2">
+              {memories.length === 0 ? (
+                <p class="text-center py-4 text-xs text-muted">目前还没有记忆...</p>
+              ) : (
+                memories.map(m => (
+                  <div key={m.id} class="flex justify-between items-start p-3 rounded-2xl bg-surface-hover group border border-transparent hover:border-border transition-all">
+                    <div class="space-y-1 flex-1">
+                      <p class="text-xs">{m.content}</p>
+                      <p class="text-[10px] text-muted">{new Date(m.timestamp).toLocaleDateString()}</p>
+                    </div>
+                    <button onClick={() => {
+                      removeMemory(m.id);
+                      setMemories(fetchMemories(friendId));
+                    }} class="text-muted opacity-0 group-hover:opacity-100 hover:text-danger p-1">
+                      🗑️
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

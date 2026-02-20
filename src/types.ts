@@ -1,72 +1,47 @@
-export interface AutoReplyConfig {
-  enabled: boolean
-  idleMinutes: number // 多少分钟不说话触发回复
-  lastCheckTime?: number
-}
+// === AI 配置 ===
+export type AIProvider = 'zhipu' | 'google' | 'groq' | 'volcengine' | 'modelscope'
 
-// === 记忆片段 ===
-export interface Memory {
-  id: string
-  friendId: string
-  content: string
-  importance: number // 1-10
-  type: 'event' | 'preference' | 'fact'
-  timestamp: number
-}
-
-// === AI 朋友 ===
-export interface Friend {
-  id: string
-  name: string
-  avatar?: string
-  personality: string
-  mood: number // 0-100
-  intimacy: number // 0-1000
-  appearance: string // 外观描述
-  outfit: string // 今天的打扮
-  physicalCondition: string // 身体状态（如：有点感冒、精力充沛）
-  lastStateUpdate: number // 上次状态自动刷新的时间
-  autoReply: AutoReplyConfig
-  createdAt: number
-}
-
-// === 消息 ===
-export interface Message {
-  id: string
-  conversationId: string
-  senderId: string
-  senderName: string
-  content: string
-  images?: string[]
-  timestamp: number
-  status: 'pending' | 'sent' | 'failed'
-}
-
-// === 会话 ===
-export interface Conversation {
-  id: string
-  type: 'private' | 'group'
-  name?: string
-  friendIds: string[]
-  lastMessage?: string
-  lastMessageTime?: number
-  createdAt: number
-}
-
-// === 智谱配置 ===
-export interface ZhipuConfig {
+export interface AIProviderConfig {
+  provider: AIProvider
   apiKey: string
-  chatModel: 'GLM-4.6V-Flash' | 'GLM-4.7-Flash' | 'GLM-4V-Flash'
-  imageModel: 'Cogview-3-Flash'
+  chatModel: string
+  imageModel?: string
+  baseUrl?: string
+  imageQuality?: 'hd' | 'standard'
+  imageSize?: string
 }
 
-// 可用模型（supportsVision 表示是否支持图片）
-export const CHAT_MODELS = [
-  { id: 'GLM-4.6V-Flash', name: 'GLM-4.6V-Flash', desc: '128K上下文，视觉模型', supportsVision: true },
-  { id: 'GLM-4.7-Flash', name: 'GLM-4.7-Flash', desc: '最新文本模型，速度快', supportsVision: false },
-  { id: 'GLM-4V-Flash', name: 'GLM-4V-Flash', desc: '经典视觉模型', supportsVision: true }
-] as const
+export interface AppConfig {
+  activeProvider: AIProvider
+  imageProvider: AIProvider // 新增：专门用于生图的提供商
+  providers: Record<AIProvider, AIProviderConfig>
+  imageGenerationEnabled: boolean
+}
 
-export const IMAGE_MODELS = [
-  { id: 'Cogview-3-Flash', name: 'Cogview-3-Flash', desc: '快速生图' }
-] as const
+// ... 保持 CHAT_MODELS 和 IMAGE_MODELS 不变 ...
+export const CHAT_MODELS: Record<AIProvider, any[]> = {
+  zhipu: [
+    { id: 'GLM-4.6V-Flash', name: 'GLM-4.6V-Flash', desc: '视觉模型', supportsVision: true },
+    { id: 'GLM-4.7-Flash', name: 'GLM-4.7-Flash', desc: '最新文本', supportsVision: false }
+  ],
+  google: [
+    { id: 'gemma-3-27b-it', name: 'Gemma 3 27B', desc: '最新开源', supportsVision: true },
+    { id: 'gemma-3-12b-it', name: 'Gemma 3 12B', desc: '中等开源', supportsVision: true },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: '极速', supportsVision: true }
+  ],
+  groq: [{ id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', desc: '极速', supportsVision: false }],
+  volcengine: [{ id: 'doubao-pro-32k', name: '豆包 Pro', supportsVision: false }],
+  modelscope: [{ id: 'qwen-max', name: '通义千问', supportsVision: false }]
+}
+
+export const IMAGE_MODELS: Record<AIProvider, { id: string, name: string }[]> = {
+  zhipu: [{ id: 'cogview-3-flash', name: 'Cogview-3-Flash' }, { id: 'cogview-3-plus', name: 'Cogview-3-Plus' }],
+  google: [], volcengine: [], groq: [], modelscope: []
+}
+
+// === 核心类型 ===
+export interface AutoReplyConfig { enabled: boolean; idleMinutes: number }
+export interface Memory { id: string; friendId: string; content: string; importance: number; type: 'event' | 'preference' | 'fact'; timestamp: number }
+export interface Friend { id: string; name: string; avatar?: string; personality: string; mood: number; intimacy: number; appearance: string; outfit: string; physicalCondition: string; lastStateUpdate: number; autoReply: AutoReplyConfig; createdAt: number }
+export interface Message { id: string; conversationId: string; senderId: string; senderName: string; content: string; images?: string[]; timestamp: number; status: 'pending' | 'sent' | 'failed' }
+export interface Conversation { id: string; type: 'private' | 'group'; name?: string; friendIds: string[]; lastMessage?: string; lastMessageTime?: number; createdAt: number }

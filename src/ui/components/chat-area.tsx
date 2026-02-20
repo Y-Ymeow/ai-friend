@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "preact/hooks"
 import { Button } from "../components/button"
 import { cn } from "../lib/utils"
 import { compressImage } from "../../lib/image"
-import { getShowImages } from "../../db/db"
+import { getShowImages, getAppConfig, setAppConfig } from "../../db/db"
 import type { Message, Friend, Conversation } from "../../types"
 
 interface Props {
@@ -27,7 +27,9 @@ export const ChatArea: FunctionalComponent<Props> = ({
   const [text, setText] = useState("")
   const [images, setImages] = useState<string[]>([])
   const [offset, setOffset] = useState(0)
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [aiImageGen, setAiImageGen] = useState(getAppConfig().imageGenerationEnabled)
+  
   const showImages = getShowImages()
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -43,41 +45,13 @@ export const ChatArea: FunctionalComponent<Props> = ({
     }
   }, [messages.length])
 
-  // 监听键盘弹出/收起（视口高度变化），自动滚动到底部
-  useEffect(() => {
-    const handleResize = () => {
-      // 使用 setTimeout 确保在布局调整完成后再滚动
-      setTimeout(() => {
-        if (offset === 0) {
-          bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-        }
-      }, 100)
-    }
-
-    // 监听 visualViewport 变化（更精确的键盘检测）
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize)
-      return () => window.visualViewport?.removeEventListener('resize', handleResize)
-    } else {
-      // 降级到 window resize
-      window.addEventListener('resize', handleResize)
-      return () => window.removeEventListener('resize', handleResize)
-    }
-  }, [offset])
-
-  const adjustTextareaHeight = () => {
-    const ta = textareaRef.current
-    if (!ta) return
-    ta.style.height = 'auto'
-    const lineHeight = 20
-    const maxLines = 5
-    const maxHeight = lineHeight * maxLines
-    ta.style.height = Math.min(ta.scrollHeight, maxHeight) + 'px'
+  // 同步 AI 生图状态到全局配置
+  const toggleAiImageGen = () => {
+    const newVal = !aiImageGen
+    setAiImageGen(newVal)
+    const config = getAppConfig()
+    setAppConfig({ ...config, imageGenerationEnabled: newVal })
   }
-
-  useEffect(() => {
-    adjustTextareaHeight()
-  }, [text])
 
   const handleSend = () => {
     if ((!text.trim() && images.length === 0) || disabled) return
@@ -105,12 +79,6 @@ export const ChatArea: FunctionalComponent<Props> = ({
     ;(e.target as HTMLInputElement).value = ''
   }
 
-  const handleLoadMore = () => {
-    const nextOffset = offset + 20
-    setOffset(nextOffset)
-    if (onLoadMore) onLoadMore(20, nextOffset)
-  }
-
   const getTitle = (): string => {
     if (!conversation) return 'AI 朋友'
     if (conversation.name) return conversation.name
@@ -128,12 +96,6 @@ export const ChatArea: FunctionalComponent<Props> = ({
     return null
   }
 
-  const handleTitleClick = () => {
-    if (conversation?.type === 'private' && onShowDetail) {
-      onShowDetail(conversation.friendIds[0])
-    }
-  }
-
   return (
     <div class="h-full flex flex-col bg-background">
       <header class="fixed lg:relative top-0 left-0 right-0 lg:left-auto lg:right-auto lg:top-auto z-20 h-12 px-3 flex items-center gap-2 border-b border-border bg-background">
@@ -145,7 +107,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
         )}
         <h1 
           class={cn("font-semibold truncate", conversation?.type === 'private' && "cursor-pointer hover:text-accent")} 
-          onClick={handleTitleClick}
+          onClick={() => conversation?.type === 'private' && onShowDetail?.(conversation.friendIds[0])}
         >
           {getTitle()}
         </h1>
@@ -154,7 +116,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
       <div class="flex-1 overflow-auto p-4 pt-14 lg:pt-4 space-y-3">
         {conversation && messages.length >= 20 && (
           <div class="text-center py-2">
-            <button onClick={handleLoadMore} class="text-xs text-accent hover:underline">查看更多历史消息</button>
+            <button onClick={() => onLoadMore?.(20, offset + 20)} class="text-xs text-accent hover:underline">查看更多历史消息</button>
           </div>
         )}
 
@@ -173,21 +135,21 @@ export const ChatArea: FunctionalComponent<Props> = ({
                 <div class={cn("w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm overflow-hidden", isUser ? "bg-accent text-white" : "bg-surface-hover")}>
                   {isUser ? '我' : friend?.avatar ? <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" /> : (friend?.name || '友').charAt(0)}
                 </div>
-                <div class={cn("max-w-[75%] rounded-2xl px-3 py-2 relative", isUser ? "bg-accent text-white rounded-tr-sm" : "bg-surface-hover rounded-tl-sm")}>
+                <div class={cn("max-w-[85%] rounded-2xl px-3 py-2 relative", isUser ? "bg-accent text-white rounded-tr-sm" : "bg-surface-hover rounded-tl-sm")}>
                   {!isUser && (
                     <div class="text-xs text-muted mb-1 flex items-center gap-2">
                       {friend?.name || msg.senderName}
-                      {isTyping && <span class="text-accent animate-pulse">输入中...</span>}
+                      {isTyping && <span class="text-accent animate-pulse">正在输入...</span>}
                     </div>
                   )}
                   {msg.images && msg.images.length > 0 && showImages && (
                     <div class="flex flex-wrap gap-1 mb-1">
                       {msg.images.map((img, i) => (
-                        <img key={i} src={img} class="max-w-[120px] max-h-[120px] rounded cursor-pointer" onClick={() => setPreviewIndex(i)} />
+                        <img key={i} src={img} class="max-w-[180px] max-h-[240px] rounded-lg cursor-zoom-in border border-border/50" onClick={() => setPreviewUrl(img)} />
                       ))}
                     </div>
                   )}
-                  {msg.content && <p class="text-sm whitespace-pre-wrap">{msg.content}</p>}
+                  {msg.content && <p class="text-sm whitespace-pre-wrap break-words">{msg.content}</p>}
                   
                   {isUser && onRetry && (
                     <button 
@@ -205,35 +167,53 @@ export const ChatArea: FunctionalComponent<Props> = ({
         )}
         
         {generatingIds.size > 0 && (
-          <div class="text-center text-muted text-sm italic">
-            {[...generatingIds].map(id => friends.find(f => f.id === id)?.name).filter(Boolean).join('、')} 正在回复...
+          <div class="text-center text-muted text-xs italic py-2">
+            {[...generatingIds].map(id => friends.find(f => f.id === id)?.name).filter(Boolean).join('、')} 正在思考...
           </div>
         )}
-        {isWaiting && <div class="text-center text-muted text-sm italic">等待更多输入... (3秒后回复)</div>}
+        {isWaiting && <div class="text-center text-muted text-xs italic py-2">正在等待更多输入 (3s)...</div>}
         <div ref={bottomRef} />
       </div>
 
       {images.length > 0 && (
-        <div class="flex-shrink-0 px-3 pt-2 flex gap-2 flex-wrap border-t border-border">
+        <div class="flex-shrink-0 px-3 py-2 flex gap-2 flex-wrap border-t border-border bg-surface/50">
           {images.map((img, i) => (
             <div key={i} class="relative group">
-              <img src={img} class="w-16 h-16 object-cover rounded border border-border" />
+              <img src={img} class="w-16 h-16 object-cover rounded-lg border border-border shadow-sm" />
               <button
                 onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
-                class="absolute -top-1 -right-1 w-5 h-5 bg-danger text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                class="absolute -top-2 -right-2 w-5 h-5 bg-danger text-white rounded-full text-xs shadow-md flex items-center justify-center"
               >×</button>
             </div>
           ))}
           <button
             onClick={() => setImages([])}
-            class="w-16 h-16 flex items-center justify-center border border-dashed border-border rounded text-muted text-xs hover:border-accent hover:text-accent transition-colors"
-          >清除全部</button>
+            class="w-16 h-16 flex flex-col items-center justify-center border border-dashed border-border rounded-lg text-muted text-[10px] hover:border-accent hover:text-accent transition-colors"
+          >
+            <span>🗑️</span>
+            <span>清除</span>
+          </button>
         </div>
       )}
 
-      <div class="flex-shrink-0 p-3 border-t border-border flex gap-2 items-end">
+      <div class="flex-shrink-0 p-3 border-t border-border flex gap-2 items-end bg-background">
         <input ref={fileRef} type="file" accept="image/*" multiple class="hidden" onChange={handleFiles} />
-        <Button variant="outline" size="icon" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>🖼</Button>
+        
+        <div class="flex gap-1">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            class={cn("rounded-full", aiImageGen ? "text-accent border-accent bg-accent/10" : "text-muted")}
+            onClick={toggleAiImageGen}
+            title={aiImageGen ? "AI 生图已开启" : "AI 生图已关闭"}
+          >
+            {aiImageGen ? "✨" : "🪄"}
+          </Button>
+          <Button variant="outline" size="icon" class="rounded-full text-muted" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>
+            🖼️
+          </Button>
+        </div>
+
         <textarea
           ref={textareaRef}
           value={text}
@@ -242,17 +222,18 @@ export const ChatArea: FunctionalComponent<Props> = ({
             if (onTyping) onTyping()
           }}
           onKeyDown={handleKey}
-          placeholder="输入消息..."
+          placeholder="给朋友发消息..."
           rows={1}
-          class="flex-1 px-3 py-2 rounded-2xl border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-accent resize-none overflow-hidden leading-5"
-          style={{ maxHeight: '100px' }}
+          class="flex-1 px-4 py-2.5 rounded-2xl border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-accent resize-none overflow-hidden leading-5 text-sm"
+          style={{ maxHeight: '120px' }}
         />
-        <Button onClick={handleSend} disabled={!text.trim() && images.length === 0}>发送</Button>
+        <Button onClick={handleSend} class="rounded-full px-5" disabled={!text.trim() && images.length === 0}>发送</Button>
       </div>
 
-      {previewIndex !== null && (
-        <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setPreviewIndex(null)}>
-          <img src={messages.flatMap(m => m.images || [])[previewIndex]} class="max-w-full max-h-full" />
+      {previewUrl && (
+        <div class="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4" onClick={() => setPreviewUrl(null)}>
+          <img src={previewUrl} class="max-w-full max-h-full object-contain rounded shadow-2xl" />
+          <button class="absolute top-4 right-4 text-white text-3xl" onClick={() => setPreviewUrl(null)}>&times;</button>
         </div>
       )}
     </div>

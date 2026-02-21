@@ -10,6 +10,7 @@ import {
   imageUrlToBase64,
   getUserName,
   getConversations,
+  createMemory,
 } from "../db/db";
 import {
   CHAT_MODELS,
@@ -52,16 +53,21 @@ function buildSystemPrompt(friend: Friend, isGroupChat: boolean = false, userNam
 ${memoryContext}
 
 【对话格式规范】
-- 你在对话时，用 [我]: 开头表示你的发言
+- 你在对话时，用 [我]: 开头表示你的发言（仅用于格式展示，实际回复时不需要加）
 - 用户（聊天对象）的昵称是"${userName}"，在聊天记录中显示为 [${userName}]:
 - 群聊中其他角色的消息显示为 [角色名]:
 - 不要使用"AI"、"助手"、"模型"等词汇
+
+【特殊能力】
+- [SAVE_MEMORY: 要记住的内容] - 当你想记住对方的重要信息时使用（如对方的喜好、经历、约定等）
+  示例：[SAVE_MEMORY: 对方喜欢喝奶茶，讨厌香菜]
 
 【回复规范】
 1. 真人社交语境回复，简短随性，像真人聊天一样。
 2. 支持 [CONTINUE] 表示连发消息。
 3. 支持 [GEN_IMAGE: 描述词] 主动分享图片（描述词用中文，尽量详细）。
-4. 群聊时，请根据上下文判断对话对象，自然参与讨论。`;
+4. 群聊时，请根据上下文判断对话对象，自然参与讨论。
+5. 当对方提到重要信息（喜好、生日、约定、经历等），使用 [SAVE_MEMORY: ...] 记录下来`;
 }
 
 interface ChatMessage {
@@ -71,9 +77,26 @@ interface ChatMessage {
 }
 
 function buildMessages(cid: string, umsg: string, friendId: string, isGroupChat: boolean = false): ChatMessage[] {
-  const all = getMessages(cid, 2000);
+  const all = getMessages(cid, 200); // 获取最近 200 条消息
   const userName = getUserName();
-  const msgs: ChatMessage[] = all.map((m) => {
+  
+  // 计算 token 限制（约 10000 字符）
+  const MAX_CHARS = 10000;
+  let totalChars = 0;
+  const limitedMsgs: typeof all = [];
+  
+  // 从后往前遍历，保留最近的消息直到达到字符限制
+  for (let i = all.length - 1; i >= 0; i--) {
+    const m = all[i];
+    totalChars += m.content.length + 50; // 加上格式开销
+    if (totalChars > MAX_CHARS && i < all.length - 10) {
+      // 至少保留最后 10 条
+      break;
+    }
+    limitedMsgs.unshift(m);
+  }
+  
+  const msgs: ChatMessage[] = limitedMsgs.map((m) => {
     if (m.senderId === "user") {
       // 用户消息：显示为 [昵称]:
       return { role: "user", content: `[${userName}]: ${m.content}` };
@@ -85,6 +108,7 @@ function buildMessages(cid: string, umsg: string, friendId: string, isGroupChat:
       return { role: "assistant", name: m.senderName, content: `[${m.senderName}]: ${m.content}` };
     }
   });
+  
   if (umsg) {
     // 当前用户消息也加上标识
     msgs.push({ role: "user", content: `[${userName}]: ${umsg}` });
@@ -290,6 +314,29 @@ async function generateReplyWithAgent(
     content = content.replace(/\[GEN_IMAGE:.*?\]/, "").trim();
   }
 
+  // 处理保存记忆的指令
+  const memoryMatch = content.match(/\[SAVE_MEMORY:\s*(.*?)\]/);
+  if (memoryMatch) {
+    const memoryContent = memoryMatch[1];
+    content = content.replace(/\[SAVE_MEMORY:.*?\]/, "").trim();
+    // 保存记忆到数据库
+    try {
+      createMemory({
+        friendId: fid,
+        content: memoryContent,
+        importance: 5,
+        type: "fact",
+        timestamp: Date.now(),
+      });
+      console.log(`[AI] 已保存记忆：${memoryContent}`);
+    } catch (e) {
+      console.error("[AI] 保存记忆失败:", e);
+    }
+  }
+
+  // 移除回复开头的 [我]: 前缀（AI 可能会模仿格式）
+  content = content.replace(/^\[我\]:\s*/, "").trim();
+
   if (content || imgPrompt) {
     let genImgs: string[] = [];
     if (imgPrompt && config.imageGenerationEnabled) {
@@ -314,6 +361,7 @@ async function generateReplyWithAgent(
     if (onReply) onReply(msg);
     if (shouldContinue) {
       await new Promise((r) => setTimeout(r, 2000));
+      // CONTINUE 时传入空字符串，让 AI 基于最新历史（包含刚发的消息）回复
       await generateReplyWithAgent(cid, fid, "", [], onReply, depth + 1, isGroupChat);
     }
   }

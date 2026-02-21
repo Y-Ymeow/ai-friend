@@ -19,23 +19,37 @@ interface Props { friendId: string; onBack: () => void; }
 export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack }) => {
   // 使用 .value 确保响应式
   const friend = friends.value.find((f) => f.id === friendId);
-  
+
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [isRefreshingState, setIsRefreshingState] = useState(false);
   const [newMemory, setNewMemory] = useState("");
-  
+
   // 编辑状态
   const [isEditingPersonality, setIsEditingPersonality] = useState(false);
   const [personalityText, setPersonalityText] = useState("");
   const [isEditingAppearance, setIsEditingAppearance] = useState(false);
   const [appearanceText, setAppearanceText] = useState("");
+  // 基本数据编辑状态
+  const [isEditingBasic, setIsEditingBasic] = useState(false);
+  const [basicData, setBasicData] = useState({
+    gender: "" as "female" | "male" | "other" | "",
+    height: "",
+    weight: "",
+    age: "",
+  });
 
   useEffect(() => {
     if (friendId) { setMemories(fetchMemories(friendId)); }
-    if (friend) { 
-      setPersonalityText(friend.personality); 
-      setAppearanceText(friend.appearance); 
+    if (friend) {
+      setPersonalityText(friend.personality);
+      setAppearanceText(friend.appearance);
+      setBasicData({
+        gender: friend.gender || "",
+        height: friend.height?.toString() || "",
+        weight: friend.weight?.toString() || "",
+        age: friend.age?.toString() || "",
+      });
     }
   }, [friendId, friend]);
 
@@ -45,6 +59,16 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack 
     updateFriend(friendId, { [field]: value });
     if (field === 'personality') setIsEditingPersonality(false);
     if (field === 'appearance') setIsEditingAppearance(false);
+  };
+  
+  const handleUpdateBasic = () => {
+    updateFriend(friendId, {
+      gender: basicData.gender || undefined,
+      height: basicData.height ? Number(basicData.height) : undefined,
+      weight: basicData.weight ? Number(basicData.weight) : undefined,
+      age: basicData.age ? Number(basicData.age) : undefined,
+    });
+    setIsEditingBasic(false);
   };
 
   const handleGenerateAvatar = async () => {
@@ -123,6 +147,117 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack 
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 基本数据卡片 */}
+          <Card class="p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-border pb-2">
+              <h3 class="font-bold flex items-center gap-2">
+                <span>📊</span> 基本数据
+              </h3>
+              {!isEditingBasic && (
+                <button
+                  onClick={() => setIsEditingBasic(true)}
+                  class="text-[10px] px-2 py-1 rounded-md bg-surface-hover text-accent border border-accent/20 hover:bg-accent/5 transition-colors font-bold"
+                >
+                  修改
+                </button>
+              )}
+            </div>
+            {isEditingBasic ? (
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium mb-1">性别</label>
+                  <div class="flex gap-2">
+                    <label class="flex items-center gap-1 text-sm">
+                      <input
+                        type="radio"
+                        name="gender"
+                        checked={basicData.gender === "female"}
+                        onChange={() => setBasicData({ ...basicData, gender: "female" })}
+                        class="w-4 h-4"
+                      />
+                      女
+                    </label>
+                    <label class="flex items-center gap-1 text-sm">
+                      <input
+                        type="radio"
+                        name="gender"
+                        checked={basicData.gender === "male"}
+                        onChange={() => setBasicData({ ...basicData, gender: "male" })}
+                        class="w-4 h-4"
+                      />
+                      男
+                    </label>
+                    <label class="flex items-center gap-1 text-sm">
+                      <input
+                        type="radio"
+                        name="gender"
+                        checked={basicData.gender === "other"}
+                        onChange={() => setBasicData({ ...basicData, gender: "other" })}
+                        class="w-4 h-4"
+                      />
+                      其他
+                    </label>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="block text-xs font-medium mb-1">身高 (cm)</label>
+                    <input
+                      type="number"
+                      value={basicData.height}
+                      onInput={e => setBasicData({ ...basicData, height: (e.target as HTMLInputElement).value })}
+                      class="w-full px-2 py-1.5 rounded-lg border border-border bg-surface text-sm"
+                      placeholder="165"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium mb-1">体重 (kg)</label>
+                    <input
+                      type="number"
+                      value={basicData.weight}
+                      onInput={e => setBasicData({ ...basicData, weight: (e.target as HTMLInputElement).value })}
+                      class="w-full px-2 py-1.5 rounded-lg border border-border bg-surface text-sm"
+                      placeholder="50"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium mb-1">年龄</label>
+                    <input
+                      type="number"
+                      value={basicData.age}
+                      onInput={e => setBasicData({ ...basicData, age: (e.target as HTMLInputElement).value })}
+                      class="w-full px-2 py-1.5 rounded-lg border border-border bg-surface text-sm"
+                      placeholder="20"
+                    />
+                  </div>
+                </div>
+                <div class="flex justify-end gap-3">
+                  <button onClick={() => setIsEditingBasic(false)} class="text-xs text-muted">取消</button>
+                  <button onClick={handleUpdateBasic} class="text-xs bg-accent text-white px-3 py-1 rounded-lg">保存</button>
+                </div>
+              </div>
+            ) : (
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-muted">性别</span>
+                  <span>{friend.gender === "female" ? "女" : friend.gender === "male" ? "男" : friend.gender ? "其他" : "-"}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-muted">身高</span>
+                  <span>{friend.height ? `${friend.height} cm` : "-"}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-muted">体重</span>
+                  <span>{friend.weight ? `${friend.weight} kg` : "-"}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-muted">年龄</span>
+                  <span>{friend.age ? `${friend.age} 岁` : "-"}</span>
+                </div>
+              </div>
+            )}
+          </Card>
+          
           {/* 实时状态卡片 */}
           <Card class="p-5 space-y-4 border-accent/10 bg-accent/[0.02]">
             <div class="flex justify-between items-center border-b border-border pb-2">

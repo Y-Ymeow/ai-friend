@@ -350,6 +350,10 @@ async function generateReplyWithAgent(
   // 只移除带方括号的前缀，保留内容
   content = content.replace(/^\[[^\]]+\]:\s*/g, "").trim();
 
+  // 清理 AI 模仿聊天记录格式的前缀（如"赵敏：xxx"或"赵敏:xxx"）
+  // 匹配"角色名:"或"角色名:"格式，移除前缀保留内容
+  content = content.replace(/^[^:：]+[:：]\s*/g, "").trim();
+
   if (content || imgPrompt) {
     let genImgs: string[] = [];
     if (imgPrompt && config.imageGenerationEnabled) {

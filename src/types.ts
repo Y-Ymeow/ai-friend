@@ -15,7 +15,7 @@ export interface AIProviderConfig {
   baseUrl?: string;
   imageQuality?: "hd" | "standard";
   imageSize?: string;
-  // 自定义模型配置
+  // 自定义模型配置（每个提供商都可以有自己的自定义模型）
   customModels?: CustomModel[];
 }
 

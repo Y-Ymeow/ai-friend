@@ -198,15 +198,17 @@ export const ChatArea: FunctionalComponent<Props> = ({
                       "opacity-0 group-hover:opacity-100",
                       isActionMenuOpen ? "opacity-100" : ""
                     )}>
-                      {!isUser && onRetry && (
+                      {/* 用户消息显示重试按钮（重试 AI 回复） */}
+                      {isUser && onRetry && (
                         <button
-                          onClick={() => { onRetry?.(); setShowActionMenu(null) }}
+                          onClick={() => { onRetry?.(msg.id); setShowActionMenu(null) }}
                           class="w-8 h-8 flex items-center justify-center bg-surface border border-border rounded-full text-sm text-muted hover:text-accent hover:border-accent transition-colors shadow-lg"
-                          title="重试"
+                          title="重试 AI 回复"
                         >
                           🔄
                         </button>
                       )}
+                      {/* 删除按钮：所有消息都可删除 */}
                       {onDeleteMessage && (
                         <button
                           onClick={() => { onDeleteMessage(msg.id); setShowActionMenu(null) }}

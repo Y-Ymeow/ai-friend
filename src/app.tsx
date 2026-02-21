@@ -105,6 +105,10 @@ export function App() {
     }
   }, [])
 
+  const handleRetry = useCallback((msgId?: string) => {
+    retryAIResponse(msgId)
+  }, [])
+
   const handleReset = useCallback(() => {
     resetAllData()
     navigate('home')
@@ -158,7 +162,7 @@ export function App() {
           onTyping={notifyTyping}
           onShowDetail={(id) => navigate('friend-detail', { id })}
           onLoadMore={(limit, offset) => refreshMessages(limit, offset)}
-          onRetry={retryAIResponse}
+          onRetry={handleRetry}
           onDeleteMessage={handleDeleteMessage}
           onClearChat={handleClearChat}
           disabled={isGenerating.value}

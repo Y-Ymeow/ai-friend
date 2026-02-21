@@ -24,7 +24,7 @@ export const isGenerating = signal(false);
 export const generatingFriendIds = signal<Set<string>>(new Set());
 
 // === 构建 Prompt ===
-function buildSystemPrompt(friend: Friend, isGroupChat: boolean = false, userName: string = "用户"): string {
+function buildSystemPrompt(friend: Friend, userName: string = "用户"): string {
   const now = new Date();
   const timeStr = now.toLocaleString("zh-CN", {
     month: "long",
@@ -58,11 +58,11 @@ function buildSystemPrompt(friend: Friend, isGroupChat: boolean = false, userNam
 ${memoryContext}
 
 【对话格式说明】
-- 聊天记录中，你的发言标注为：${friend.name}: 内容
+- 聊天记录中，你的发言直接显示内容（你说的话没有前缀）
 - 用户（${userName}）的消息显示为：[${userName}]: 内容（带方括号）
 - 群聊中其他角色的消息显示为：[角色名]: 内容（带方括号）
 - 你回复时正常说话即可，不要加任何前缀
-- 注意：${friend.name}: 是你自己说的话，[角色名]: 是别人说的话
+- 注意：没有方括号的是你自己说的话，带方括号 [角色名]: 是别人说的话
 
 【重要规范】
 - 你只能代表你自己（${friend.name}），不能冒充其他角色
@@ -89,7 +89,7 @@ interface ChatMessage {
   content: string | any[];
 }
 
-function buildMessages(cid: string, umsg: string, friendId: string, isGroupChat: boolean = false): ChatMessage[] {
+function buildMessages(cid: string, umsg: string, friendId: string): ChatMessage[] {
   const all = getMessages(cid, 200); // 获取最近 200 条消息
   const userName = getUserName();
   
@@ -111,13 +111,13 @@ function buildMessages(cid: string, umsg: string, friendId: string, isGroupChat:
   
   const msgs: ChatMessage[] = limitedMsgs.map((m) => {
     if (m.senderId === "user") {
-      // 用户消息：显示为 [昵称]: 内容
+      // 用户消息：role=user，内容为 [昵称]: 内容
       return { role: "user", content: `[${userName}]: ${m.content}` };
     } else if (m.senderId === friendId) {
-      // 当前 AI 角色自己的消息：显示为 角色名：内容（让 AI 能识别这是自己说过的话）
-      return { role: "assistant", name: m.senderName, content: `${m.senderName}: ${m.content}` };
+      // 当前 AI 角色自己的消息：role=assistant，name=角色名，content=内容
+      return { role: "assistant", name: m.senderName, content: m.content };
     } else {
-      // 群聊中其他角色的消息：显示为 [角色名]: 内容
+      // 群聊中其他角色的消息：role=assistant，name=角色名，content=[角色名]: 内容
       return { role: "assistant", name: m.senderName, content: `[${m.senderName}]: ${m.content}` };
     }
   });
@@ -297,8 +297,7 @@ async function generateReplyWithAgent(
   umsg: string,
   imgs: string[],
   onReply?: (m: Message) => void,
-  depth = 0,
-  isGroupChat: boolean = false,
+  depth = 0
 ): Promise<void> {
   if (depth > 2) return;
   const config = getAppConfig();
@@ -310,8 +309,8 @@ async function generateReplyWithAgent(
   const userName = getUserName();
   const reply = await callAI(
     active,
-    buildSystemPrompt(friend, isGroupChat, userName),
-    buildMessages(cid, umsg, fid, isGroupChat),
+    buildSystemPrompt(friend, userName),
+    buildMessages(cid, umsg, fid),
     imgs,
   );
   if (!reply) return;
@@ -395,7 +394,7 @@ async function generateReplyWithAgent(
     if (hasContinue) {
       await new Promise((r) => setTimeout(r, 2000));
       // CONTINUE 时传入空字符串，让 AI 基于最新历史（包含刚发的消息）回复
-      await generateReplyWithAgent(cid, fid, "", [], onReply, depth + 1, isGroupChat);
+      await generateReplyWithAgent(cid, fid, "", [], onReply, depth + 1);
     }
   }
 }
@@ -410,11 +409,6 @@ export async function generateReplies(
 ) {
   isGenerating.value = true;
   generatingFriendIds.value = new Set(fids);
-
-  // 获取会话信息，判断是否是群聊
-  const allConvs = getConversations();
-  const conv = allConvs.find((c) => c.id === cid);
-  const isGroupChat = conv?.type === "group" || fids.length > 1;
 
   // 记录开始时的消息数量，用于检测用户是否打断了对话
   const initialMsgCount = getMessages(cid, 1, 0).length;
@@ -435,7 +429,7 @@ export async function generateReplies(
       // 第一个 AI 使用用户消息，后续 AI 使用空字符串（基于最新历史回复）
       const userMsg = i === 0 ? msg : "";
       const userImgs = i === 0 ? imgs : [];
-      await generateReplyWithAgent(cid, id, userMsg, userImgs, cb, 0, isGroupChat);
+      await generateReplyWithAgent(cid, id, userMsg, userImgs, cb, 0);
     } catch (e: any) {
       console.error(e);
     }

@@ -105,8 +105,8 @@ export function App() {
     }
   }, [])
 
-  const handleRetry = useCallback((msgId?: string) => {
-    retryAIResponse(msgId)
+  const handleRetry = useCallback(() => {
+    retryAIResponse()
   }, [])
 
   const handleReset = useCallback(() => {

@@ -82,7 +82,7 @@ export async function saveDb(): Promise<void> {
 }
 
 // === 显式列名定义 ===
-const FRIEND_COLS = `id, name, avatar, personality, mood, intimacy, appearance, outfit, physical_condition, last_state_update, auto_reply, created_at`;
+const FRIEND_COLS = `id, name, avatar, personality, mood, intimacy, appearance, outfit, physical_condition, last_state_update, auto_reply, created_at, gender, height, weight, age, birthday`;
 
 export function getFriends(): Friend[] {
   const result = db!.exec(`SELECT ${FRIEND_COLS} FROM friends ORDER BY created_at DESC`);

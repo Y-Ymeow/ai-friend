@@ -19,6 +19,7 @@ export const DEFAULT_PROMPTS: PromptConfig = {
 - 简短、随性，像真人发微信
 - 自然地表达情感
 - 不用"AI"、"助手"等词
+- 每次回复一两句即可，不要长篇大论
 
 【特殊标记】
 - [CONTINUE] 还有话要说

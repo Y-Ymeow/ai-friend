@@ -118,12 +118,16 @@ async function callAI(
       : "https://generativelanguage.googleapis.com/v1beta";
     const endpoint = `${base}/models/${chatModel}:generateContent?key=${apiKey}`;
 
-    // Google Gemini 支持 system role
+    // Gemma 不支持 system role，使用 user role 代替
+    const isGemma = chatModel.toLowerCase().includes("gemma");
     const apiMessages = [
-      {
+      ...(isGemma ? [{
+        role: "user",
+        parts: [{ text: `System instruction: ${systemPrompt}\n\n---\n\n` }],
+      }] : [{
         role: "system",
         parts: [{ text: systemPrompt }],
-      },
+      }]),
       ...messages.map((m) => ({
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content as string }],
@@ -136,7 +140,7 @@ async function callAI(
       body: JSON.stringify({ contents: apiMessages }),
     });
     if (!response.ok)
-      throw new Error(`Google API 错误: ${await response.text()}`);
+      throw new Error(`Google API 错误：${await response.text()}`);
     const data = await response.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
@@ -181,7 +185,7 @@ async function callAI(
     }),
   });
   if (!response.ok)
-    throw new Error(`${provider} API 错误: ${await response.text()}`);
+    throw new Error(`${provider} API 错误：${await response.text()}`);
   const data = await response.json();
   return data.choices?.[0]?.message?.content?.trim() || "";
 }
@@ -212,7 +216,7 @@ async function generateImage(prompt: string): Promise<string> {
         quality: active.imageQuality || "hd",
       }),
     });
-    if (!response.ok) throw new Error(`生图失败: ${await response.text()}`);
+    if (!response.ok) throw new Error(`生图失败：${await response.text()}`);
     const data = await response.json();
     const url = data.data?.[0]?.url;
     return url ? await imageUrlToBase64(url) : "";
@@ -269,24 +273,9 @@ async function generateReplyWithAgent(
   );
   if (!reply) return;
 
-  // 处理 CONTINUE: 如果 [CONTINUE] 后面还有内容，说明 AI 把多条消息合并成一条了
-  // 这时只处理第一条消息，忽略后续的（下次请求时会重新获取历史，AI 会看到自己刚发的消息）
   let content = reply;
-  const continueIndex = content.indexOf("[CONTINUE]");
-  let hasContinue = continueIndex !== -1;
-
-  if (hasContinue && continueIndex !== -1) {
-    const afterContinue = content.substring(continueIndex + 10).trim();
-    // 如果 [CONTINUE] 后面还有实质性内容，说明 AI 把多条消息合并了
-    if (afterContinue && afterContinue.length > 20) {
-      // 只保留 [CONTINUE] 之前的内容
-      content = content.substring(0, continueIndex).trim();
-      console.log("[AI] 检测到 AI 把多条消息合并，已截断处理");
-    } else {
-      // 正常的 CONTINUE，移除标记
-      content = content.replace("[CONTINUE]", "").trim();
-    }
-  }
+  let shouldContinue = content.includes("[CONTINUE]");
+  content = content.replace("[CONTINUE]", "").trim();
 
   let imgPrompt = "";
   const match = content.match(/\[GEN_IMAGE:\s*(.*?)\]/);
@@ -345,7 +334,7 @@ async function generateReplyWithAgent(
     updateConversationLastMessage(cid, msg.content);
     updateFriendStats(fid, 2, 3);
     if (onReply) onReply(msg);
-    if (hasContinue) {
+    if (shouldContinue) {
       await new Promise((r) => setTimeout(r, 2000));
       // CONTINUE 时传入空字符串，让 AI 基于最新历史（包含刚发的消息）回复
       await generateReplyWithAgent(cid, fid, "", [], onReply, depth + 1);
@@ -383,7 +372,7 @@ export async function generateReplies(
       // 第一个 AI 使用用户消息，后续 AI 使用空字符串（基于最新历史回复）
       const userMsg = i === 0 ? msg : "";
       const userImgs = i === 0 ? imgs : [];
-      await generateReplyWithAgent(cid, id, userMsg, userImgs, cb, 0);
+      await generateReplyWithAgent(cid, id, userMsg, userImgs, cb);
     } catch (e: any) {
       console.error(e);
     }
@@ -429,7 +418,7 @@ export async function generateFriendState(
     const json = JSON.parse(res.match(/\{[\s\S]*\}/)?.[0] || "{}");
     return {
       outfit: json.outfit || "休闲装",
-      physicalCondition: json.physicalCondition || "状态不错",
+      physicalCondition: json.physicalCondition || "状态一般",
       mood: Math.max(0, Math.min(100, json.mood || 50)),
     };
   } catch (e) {

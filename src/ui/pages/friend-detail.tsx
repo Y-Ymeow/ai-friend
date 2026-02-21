@@ -294,8 +294,8 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack 
                 <span>📝</span> 性格设定
               </h3>
               {!isEditingPersonality && (
-                <button 
-                  onClick={() => setIsEditingPersonality(true)} 
+                <button
+                  onClick={() => setIsEditingPersonality(true)}
                   class="text-[10px] px-2 py-1 rounded-md bg-surface-hover text-accent border border-accent/20 hover:bg-accent/5 transition-colors font-bold"
                 >
                   修改
@@ -304,9 +304,9 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack 
             </div>
             {isEditingPersonality ? (
               <div class="space-y-3">
-                <textarea 
-                  value={personalityText} 
-                  onInput={e => setPersonalityText((e.target as HTMLTextAreaElement).value)} 
+                <textarea
+                  value={personalityText}
+                  onInput={e => setPersonalityText((e.target as HTMLTextAreaElement).value)}
                   class="w-full p-3 bg-surface rounded-xl border border-accent/30 focus:ring-2 focus:ring-accent/20 focus:outline-none text-xs h-32 resize-none"
                 />
                 <div class="flex justify-end gap-3">
@@ -319,6 +319,42 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack 
                 "{friend.personality}"
               </p>
             )}
+          </Card>
+          
+          {/* 自动回复设置 */}
+          <Card class="p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-border pb-2">
+              <h3 class="font-bold flex items-center gap-2">
+                <span>🔔</span> 自动回复
+              </h3>
+            </div>
+            <div class="space-y-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={friend.autoReply?.enabled || false}
+                  onChange={e => updateFriend(friendId, { autoReply: { ...friend.autoReply, enabled: (e.target as HTMLInputElement).checked } })}
+                  class="w-4 h-4"
+                />
+                <span class="text-sm font-medium">开启自动回复</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-muted">等待时间：</span>
+                <select
+                  value={friend.autoReply?.idleMinutes || 30}
+                  onChange={e => updateFriend(friendId, { autoReply: { ...friend.autoReply, idleMinutes: Number((e.target as HTMLSelectElement).value) } })}
+                  class="px-2 py-1 rounded border border-border bg-surface text-xs"
+                >
+                  <option value="5">5 分钟</option>
+                  <option value="10">10 分钟</option>
+                  <option value="30">30 分钟</option>
+                  <option value="60">1 小时</option>
+                  <option value="120">2 小时</option>
+                  <option value="300">5 小时</option>
+                </select>
+                <span class="text-xs text-muted">后自动回复</span>
+              </div>
+            </div>
           </Card>
         </div>
 

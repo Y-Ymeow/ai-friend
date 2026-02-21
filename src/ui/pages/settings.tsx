@@ -135,35 +135,56 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
     }
   }
   
-  // 自定义模型管理
+  // 自定义模型管理（支持默认 provider 和自定义 provider）
   const handleSaveModel = () => {
     if (!modelForm.id || !modelForm.name) {
       alert("请填写必填项")
       return
     }
+
+    const currentCustomProvider = customProviders.find(p => p.id === activeProvider)
     
-    const currentProvider = customProviders.find(p => p.id === activeProvider)
-    if (!currentProvider) return
-    
-    let newModels: CustomModel[]
-    if (editingModel) {
-      newModels = currentProvider.models.map(m => m.id === editingModel.id ? { ...modelForm } as CustomModel : m)
-    } else {
-      if (currentProvider.models.find(m => m.id === modelForm.id)) {
-        alert("模型 ID 已存在")
-        return
+    if (currentCustomProvider) {
+      // 自定义 provider 的模型保存
+      let newModels: CustomModel[]
+      if (editingModel) {
+        newModels = currentCustomProvider.models.map(m => m.id === editingModel.id ? { ...modelForm } as CustomModel : m)
+      } else {
+        if (currentCustomProvider.models.find(m => m.id === modelForm.id)) {
+          alert("模型 ID 已存在")
+          return
+        }
+        newModels = [...currentCustomProvider.models, { ...modelForm } as CustomModel]
       }
-      newModels = [...currentProvider.models, { ...modelForm } as CustomModel]
+
+      setCustomProviders(customProviders.map(p =>
+        p.id === activeProvider ? { ...p, models: newModels } : p
+      ))
+
+      if (!editingModel && !currentCustomProvider.chatModel) {
+        updateProviderConfig(activeProvider, { chatModel: modelForm.id })
+      }
+    } else {
+      // 默认 provider 的模型保存（保存到 config.providers）
+      const currentModels = currentChat.customModels || []
+      let newModels: CustomModel[]
+      if (editingModel) {
+        newModels = currentModels.map(m => m.id === editingModel.id ? { ...modelForm } as CustomModel : m)
+      } else {
+        if (currentModels.find(m => m.id === modelForm.id)) {
+          alert("模型 ID 已存在")
+          return
+        }
+        newModels = [...currentModels, { ...modelForm } as CustomModel]
+      }
+
+      updateProviderConfig(activeProvider, { customModels: newModels })
+
+      if (!editingModel && !currentChat.chatModel) {
+        updateProviderConfig(activeProvider, { chatModel: modelForm.id })
+      }
     }
-    
-    setCustomProviders(customProviders.map(p => 
-      p.id === activeProvider ? { ...p, models: newModels } : p
-    ))
-    
-    if (!editingModel && !currentProvider.chatModel) {
-      updateProviderConfig(activeProvider, { chatModel: modelForm.id })
-    }
-    
+
     setShowModelForm(false)
     setEditingModel(null)
     setModelForm({ id: '', name: '', supportsVision: false })

@@ -273,20 +273,21 @@ export const ChatArea: FunctionalComponent<Props> = ({
                     {/* 消息操作按钮 - 桌面端悬停显示，手机端长按显示 */}
                     <div
                       class={cn(
-                        "absolute top-1/2 -translate-y-1/2 flex gap-1 transition-all duration-200",
+                        "absolute top-1/2 -translate-y-1/2 flex gap-1 transition-all duration-200 z-10",
                         "opacity-0 group-hover:opacity-100",
                         isActionMenuOpen ? "opacity-100" : "",
-                        isUser ? "-left-16" : "-right-10",
+                        isUser ? "-left-16" : "-right-16",
                       )}
                     >
                       {/* 用户消息显示重试按钮（重试 AI 回复） */}
                       {isUser && onRetry && (
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             onRetry?.();
                             setShowActionMenu(null);
                           }}
-                          class="w-7 h-7 flex items-center justify-center bg-surface border border-border rounded-full text-xs text-muted hover:text-accent hover:border-accent transition-colors shadow-lg"
+                          class="w-8 h-8 flex items-center justify-center bg-surface border border-border rounded-full text-sm text-muted hover:text-accent hover:border-accent transition-colors shadow-lg touch-manipulation"
                           title="重试 AI 回复"
                         >
                           🔄
@@ -295,11 +296,12 @@ export const ChatArea: FunctionalComponent<Props> = ({
                       {/* 删除按钮：所有消息都可删除 */}
                       {onDeleteMessage && (
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             onDeleteMessage(msg.id);
                             setShowActionMenu(null);
                           }}
-                          class="w-7 h-7 flex items-center justify-center bg-surface border border-border rounded-full text-xs text-muted hover:text-danger hover:border-danger transition-colors shadow-lg"
+                          class="w-8 h-8 flex items-center justify-center bg-surface border border-border rounded-full text-sm text-muted hover:text-danger hover:border-danger transition-colors shadow-lg touch-manipulation"
                           title="删除"
                         >
                           ❌

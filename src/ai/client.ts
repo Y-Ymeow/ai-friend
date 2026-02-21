@@ -52,10 +52,11 @@ function buildSystemPrompt(friend: Friend, isGroupChat: boolean = false, userNam
 与对方关系：${friend.intimacy > 500 ? "亲密朋友" : "朋友"}
 ${memoryContext}
 
-【对话格式规范】
-- 你在对话时，用 [我]: 开头表示你的发言（仅用于格式展示，实际回复时不需要加）
-- 用户（聊天对象）的昵称是"${userName}"，在聊天记录中显示为 [${userName}]:
-- 群聊中其他角色的消息显示为 [角色名]:
+【对话格式说明】
+- 聊天记录中，你的发言直接显示内容（无前缀）
+- 用户（${userName}）的消息显示为：[${userName}]: 内容
+- 群聊中其他角色的消息显示为：[角色名]: 内容
+- 你回复时正常说话即可，不要加任何前缀（如"[我]:"）
 - 不要使用"AI"、"助手"、"模型"等词汇
 
 【特殊能力】
@@ -98,13 +99,13 @@ function buildMessages(cid: string, umsg: string, friendId: string, isGroupChat:
   
   const msgs: ChatMessage[] = limitedMsgs.map((m) => {
     if (m.senderId === "user") {
-      // 用户消息：显示为 [昵称]:
+      // 用户消息：显示为 [昵称]: 内容
       return { role: "user", content: `[${userName}]: ${m.content}` };
     } else if (m.senderId === friendId) {
-      // 当前 AI 角色自己的消息：显示为 [我]:
-      return { role: "assistant", name: m.senderName, content: `[我]: ${m.content}` };
+      // 当前 AI 角色自己的消息：直接显示内容，不加前缀
+      return { role: "assistant", name: m.senderName, content: m.content };
     } else {
-      // 群聊中其他角色的消息：显示为 [角色名]:
+      // 群聊中其他角色的消息：显示为 [角色名]: 内容
       return { role: "assistant", name: m.senderName, content: `[${m.senderName}]: ${m.content}` };
     }
   });
@@ -333,9 +334,6 @@ async function generateReplyWithAgent(
       console.error("[AI] 保存记忆失败:", e);
     }
   }
-
-  // 移除回复开头的 [我]: 前缀（AI 可能会模仿格式）
-  content = content.replace(/^\[我\]:\s*/, "").trim();
 
   if (content || imgPrompt) {
     let genImgs: string[] = [];

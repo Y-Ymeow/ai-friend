@@ -4,7 +4,8 @@ export type AIProvider =
   | "google"
   | "groq"
   | "volcengine"
-  | "modelscope";
+  | "modelscope"
+  | "custom";
 
 export interface AIProviderConfig {
   provider: AIProvider;
@@ -14,6 +15,16 @@ export interface AIProviderConfig {
   baseUrl?: string;
   imageQuality?: "hd" | "standard";
   imageSize?: string;
+  // 自定义模型配置
+  customModels?: CustomModel[];
+}
+
+export interface CustomModel {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey?: string;
+  supportsVision?: boolean;
 }
 
 export interface AppConfig {
@@ -77,6 +88,7 @@ export const CHAT_MODELS: Record<AIProvider, any[]> = {
     { id: "doubao-pro-32k", name: "豆包 Pro", supportsVision: false },
   ],
   modelscope: [{ id: "qwen-max", name: "通义千问", supportsVision: false }],
+  custom: [], // 自定义模型由用户添加
 };
 
 export const IMAGE_MODELS: Record<AIProvider, { id: string; name: string }[]> =
@@ -86,6 +98,7 @@ export const IMAGE_MODELS: Record<AIProvider, { id: string; name: string }[]> =
     volcengine: [],
     groq: [],
     modelscope: [],
+    custom: [],
   };
 
 // === 核心类型 ===

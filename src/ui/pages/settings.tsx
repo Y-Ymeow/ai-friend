@@ -3,7 +3,7 @@ import { useState, useRef } from "preact/hooks"
 import { Button } from "../components/button"
 import { Card, CardHeader, CardTitle, CardContent } from "../components/card"
 import { getAppConfig, setAppConfig, exportDatabase, importDatabase, clearDatabase, getShowImages, setShowImages, getUserName, setUserName } from "../../db/db"
-import { CHAT_MODELS, type AIProvider, type AppConfig } from "../../types"
+import { CHAT_MODELS, type AIProvider, type AppConfig, type CustomModel } from "../../types"
 
 interface Props { onBack: () => void; onReset: () => void }
 
@@ -16,6 +16,17 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  
+  // 自定义模型管理
+  const [showCustomModelForm, setShowCustomModelForm] = useState(false)
+  const [editingModel, setEditingModel] = useState<CustomModel | null>(null)
+  const [customModelForm, setCustomModelForm] = useState({
+    id: '',
+    name: '',
+    baseUrl: '',
+    apiKey: '',
+    supportsVision: false,
+  })
 
   const handleSave = () => {
     setAppConfig({ ...config, activeProvider, imageProvider })
@@ -24,10 +35,61 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
+  
   const updateProviderConfig = (provider: AIProvider, updates: any) => {
     const newProviders = { ...config.providers }
     newProviders[provider] = { ...newProviders[provider], ...updates }
     setConfig({ ...config, providers: newProviders })
+  }
+  
+  // 自定义模型管理函数
+  const handleSaveCustomModel = () => {
+    if (!customModelForm.id || !customModelForm.name || !customModelForm.baseUrl) {
+      alert("请填写必填项")
+      return
+    }
+    const currentModels = currentChat.customModels || []
+    let newModels: CustomModel[]
+    
+    if (editingModel) {
+      // 编辑现有模型
+      newModels = currentModels.map(m => m.id === editingModel.id ? { ...customModelForm } as CustomModel : m)
+    } else {
+      // 添加新模型
+      if (currentModels.find(m => m.id === customModelForm.id)) {
+        alert("模型 ID 已存在")
+        return
+      }
+      newModels = [...currentModels, { ...customModelForm } as CustomModel]
+    }
+    
+    updateProviderConfig('custom', { customModels: newModels })
+    setShowCustomModelForm(false)
+    setEditingModel(null)
+    setCustomModelForm({ id: '', name: '', baseUrl: '', apiKey: '', supportsVision: false })
+  }
+  
+  const handleEditCustomModel = (model: CustomModel) => {
+    setEditingModel(model)
+    setCustomModelForm({
+      id: model.id,
+      name: model.name,
+      baseUrl: model.baseUrl,
+      apiKey: model.apiKey || '',
+      supportsVision: model.supportsVision || false,
+    })
+    setShowCustomModelForm(true)
+  }
+  
+  const handleDeleteCustomModel = (modelId: string) => {
+    if (!confirm("确定删除此模型？")) return
+    const currentModels = currentChat.customModels || []
+    const newModels = currentModels.filter(m => m.id !== modelId)
+    updateProviderConfig('custom', { customModels: newModels })
+    // 如果当前选中的是被删除的模型，清空选择
+    if (currentChat.chatModel === modelId) {
+      updateProviderConfig('custom', { chatModel: '' })
+    }
   }
 
   const handleImport = async (e: Event) => {
@@ -78,6 +140,7 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
               <option value="groq">Groq (Llama)</option>
               <option value="volcengine">火山引擎 (豆包)</option>
               <option value="modelscope">魔搭 (通义千问)</option>
+              <option value="custom">✨ 自定义模型</option>
             </select>
           </div>
           <div class="p-3 rounded-lg bg-surface-hover border border-border space-y-4">
@@ -97,12 +160,125 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
               />
               <p class="text-xs text-muted mt-1">如需使用代理或私有部署可在此填写</p>
             </div>
-            <div>
-              <label class="block font-medium mb-1 text-xs">对话模型</label>
-              <select value={currentChat.chatModel} onChange={e => updateProviderConfig(activeProvider, { chatModel: (e.target as HTMLSelectElement).value })} class="w-full px-3 py-2 rounded-lg border border-border bg-surface">
-                {CHAT_MODELS[activeProvider].map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
+            
+            {/* 自定义模型管理 */}
+            {activeProvider === 'custom' && (
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <label class="block font-medium text-xs">我的模型</label>
+                  <button
+                    onClick={() => {
+                      setEditingModel(null)
+                      setCustomModelForm({ id: '', name: '', baseUrl: '', apiKey: '', supportsVision: false })
+                      setShowCustomModelForm(true)
+                    }}
+                    class="text-xs px-2 py-1 bg-accent text-white rounded hover:bg-accent/80"
+                  >
+                    + 添加模型
+                  </button>
+                </div>
+                
+                {showCustomModelForm && (
+                  <div class="p-3 bg-surface rounded-lg border border-border space-y-3">
+                    <div>
+                      <label class="block text-xs mb-1">模型 ID *</label>
+                      <input
+                        type="text"
+                        value={customModelForm.id}
+                        onInput={e => setCustomModelForm({ ...customModelForm, id: (e.target as HTMLInputElement).value })}
+                        class="w-full px-2 py-1.5 rounded border border-border bg-background text-xs"
+                        placeholder="例如：gpt-4"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs mb-1">模型名称 *</label>
+                      <input
+                        type="text"
+                        value={customModelForm.name}
+                        onInput={e => setCustomModelForm({ ...customModelForm, name: (e.target as HTMLInputElement).value })}
+                        class="w-full px-2 py-1.5 rounded border border-border bg-background text-xs"
+                        placeholder="例如：GPT-4"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs mb-1">Base URL *</label>
+                      <input
+                        type="text"
+                        value={customModelForm.baseUrl}
+                        onInput={e => setCustomModelForm({ ...customModelForm, baseUrl: (e.target as HTMLInputElement).value })}
+                        class="w-full px-2 py-1.5 rounded border border-border bg-background text-xs"
+                        placeholder="例如：https://api.openai.com/v1/chat/completions"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs mb-1">API Key</label>
+                      <input
+                        type="password"
+                        value={customModelForm.apiKey}
+                        onInput={e => setCustomModelForm({ ...customModelForm, apiKey: (e.target as HTMLInputElement).value })}
+                        class="w-full px-2 py-1.5 rounded border border-border bg-background text-xs"
+                        placeholder="可选，留空使用全局配置"
+                      />
+                    </div>
+                    <label class="flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={customModelForm.supportsVision}
+                        onChange={e => setCustomModelForm({ ...customModelForm, supportsVision: (e.target as HTMLInputElement).checked })}
+                        class="w-4 h-4"
+                      />
+                      支持视觉（识图）
+                    </label>
+                    <div class="flex gap-2">
+                      <button onClick={handleSaveCustomModel} class="flex-1 px-3 py-1.5 bg-accent text-white rounded text-xs">保存</button>
+                      <button onClick={() => setShowCustomModelForm(false)} class="px-3 py-1.5 bg-surface-hover border border-border rounded text-xs">取消</button>
+                    </div>
+                  </div>
+                )}
+                
+                <div class="space-y-2">
+                  {(currentChat.customModels || []).map(model => (
+                    <div key={model.id} class="flex items-center justify-between p-2 bg-surface rounded border border-border">
+                      <div class="flex-1">
+                        <div class="text-xs font-medium">{model.name}</div>
+                        <div class="text-[10px] text-muted truncate">{model.baseUrl}</div>
+                      </div>
+                      <div class="flex gap-1">
+                        <button onClick={() => handleEditCustomModel(model)} class="text-xs px-2 py-1 text-accent hover:bg-accent/10 rounded">编辑</button>
+                        <button onClick={() => handleDeleteCustomModel(model.id)} class="text-xs px-2 py-1 text-danger hover:bg-danger/10 rounded">删除</button>
+                      </div>
+                    </div>
+                  ))}
+                  {(currentChat.customModels || []).length === 0 && (
+                    <div class="text-xs text-muted text-center py-4">暂无自定义模型，点击上方"添加模型"开始配置</div>
+                  )}
+                </div>
+                
+                <div>
+                  <label class="block font-medium mb-1 text-xs">当前使用模型</label>
+                  <select
+                    value={currentChat.chatModel}
+                    onChange={e => updateProviderConfig(activeProvider, { chatModel: (e.target as HTMLSelectElement).value })}
+                    class="w-full px-3 py-2 rounded-lg border border-border bg-surface text-xs"
+                  >
+                    <option value="">选择模型...</option>
+                    {(currentChat.customModels || []).map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.id})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+            
+            {/* 非自定义提供商的模型选择 */}
+            {activeProvider !== 'custom' && (
+              <div>
+                <label class="block font-medium mb-1 text-xs">对话模型</label>
+                <select value={currentChat.chatModel} onChange={e => updateProviderConfig(activeProvider, { chatModel: (e.target as HTMLSelectElement).value })} class="w-full px-3 py-2 rounded-lg border border-border bg-surface">
+                  {CHAT_MODELS[activeProvider].map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

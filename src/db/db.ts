@@ -169,6 +169,7 @@ export function getAppConfig(): AppConfig {
       groq: { provider: 'groq', apiKey: '', chatModel: 'llama-3.3-70b-versatile' },
       volcengine: { provider: 'volcengine', apiKey: '', chatModel: 'doubao-pro-32k' },
       modelscope: { provider: 'modelscope', apiKey: '', chatModel: 'qwen-max' },
+      custom: { provider: 'custom', apiKey: '', chatModel: '', customModels: [] },
     },
     imageGenerationEnabled: false
   };

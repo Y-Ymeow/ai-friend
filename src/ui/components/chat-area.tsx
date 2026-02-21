@@ -283,7 +283,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
                       {isUser && onRetry && (
                         <button
                           onClick={() => {
-                            onRetry?.(msg.id);
+                            onRetry?.();
                             setShowActionMenu(null);
                           }}
                           class="w-7 h-7 flex items-center justify-center bg-surface border border-border rounded-full text-xs text-muted hover:text-accent hover:border-accent transition-colors shadow-lg"

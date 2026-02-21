@@ -9,7 +9,6 @@ import {
   updateFriendStats,
   imageUrlToBase64,
   getUserName,
-  getConversations,
   createMemory,
 } from "../db/db";
 import {

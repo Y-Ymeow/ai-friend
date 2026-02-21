@@ -25,3 +25,4 @@ dist-ssr
 *.sw?
 .opencode/skills/chatai-app/modules/src.md
 /.opencode
+/.qwen

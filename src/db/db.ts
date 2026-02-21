@@ -150,11 +150,34 @@ export function createMessage(msg: Omit<Message, "id">): Message {
 // === 核心逻辑补充 ===
 export function getAppConfig(): AppConfig {
   const s = localStorage.getItem("app_config");
-  const def: AppConfig = { activeProvider: 'zhipu', imageProvider: 'zhipu', providers: { zhipu: { provider: 'zhipu', apiKey: '', chatModel: 'GLM-4.6V-Flash' }, google: { provider: 'google', apiKey: '', chatModel: 'gemma-3-27b-it' }, groq: { provider: 'groq', apiKey: '', chatModel: 'llama-3.3-70b-versatile' }, volcengine: { provider: 'volcengine', apiKey: '', chatModel: 'doubao-pro-32k' }, modelscope: { provider: 'modelscope', apiKey: '', chatModel: 'qwen-max' } }, imageGenerationEnabled: false };
+  const def: AppConfig = {
+    activeProvider: 'zhipu',
+    imageProvider: 'zhipu',
+    providers: {
+      zhipu: { provider: 'zhipu', apiKey: '', chatModel: 'GLM-4.6V-Flash' },
+      google: { provider: 'google', apiKey: '', chatModel: 'gemma-3-27b-it' },
+      groq: { provider: 'groq', apiKey: '', chatModel: 'llama-3.3-70b-versatile' },
+      volcengine: { provider: 'volcengine', apiKey: '', chatModel: 'doubao-pro-32k' },
+      modelscope: { provider: 'modelscope', apiKey: '', chatModel: 'qwen-max' },
+      tencent: { provider: 'tencent', apiKey: '', chatModel: 'hunyuan-lite' },
+    },
+    imageGenerationEnabled: false
+  };
   if (!s) return def;
   try { const p = JSON.parse(s); return { ...def, ...p, providers: { ...def.providers, ...p.providers } }; } catch { return def; }
 }
+
 export function setAppConfig(c: AppConfig) { localStorage.setItem("app_config", JSON.stringify(c)); }
+
+export function getUserName(): string {
+  const name = localStorage.getItem("user_name");
+  return name || "用户";
+}
+
+export function setUserName(name: string) {
+  localStorage.setItem("user_name", name);
+}
+
 export function getShowImages() { return localStorage.getItem("show_images") !== "false"; }
 export function setShowImages(s: boolean) { localStorage.setItem("show_images", String(s)); }
 export function updateFriendStats(id: string, i: number, m: number) { const f = getFriend(id); if (f) updateFriend(id, { intimacy: f.intimacy + i, mood: Math.max(0, Math.min(100, f.mood + m)) }); }

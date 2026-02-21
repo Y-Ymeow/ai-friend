@@ -2,7 +2,7 @@ import { type FunctionalComponent } from "preact"
 import { useState, useRef } from "preact/hooks"
 import { Button } from "../components/button"
 import { Card, CardHeader, CardTitle, CardContent } from "../components/card"
-import { getAppConfig, setAppConfig, exportDatabase, importDatabase, clearDatabase, getShowImages, setShowImages } from "../../db/db"
+import { getAppConfig, setAppConfig, exportDatabase, importDatabase, clearDatabase, getShowImages, setShowImages, getUserName, setUserName } from "../../db/db"
 import { CHAT_MODELS, type AIProvider, type AppConfig } from "../../types"
 
 interface Props { onBack: () => void; onReset: () => void }
@@ -12,12 +12,23 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
   const [activeProvider, setActiveProvider] = useState<AIProvider>(config.activeProvider)
   const [imageProvider, setImageProvider] = useState<AIProvider>(config.imageProvider || 'zhipu')
   const [showImages, setShowImagesState] = useState(getShowImages())
+  const [userName, setUserNameState] = useState(getUserName())
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const handleSave = () => { setAppConfig({ ...config, activeProvider, imageProvider }); setShowImages(showImages); setSaved(true); setTimeout(() => setSaved(false), 2000); }
-  const updateProviderConfig = (provider: AIProvider, updates: any) => { const newProviders = { ...config.providers }; newProviders[provider] = { ...newProviders[provider], ...updates }; setConfig({ ...config, providers: newProviders }); }
+  const handleSave = () => {
+    setAppConfig({ ...config, activeProvider, imageProvider })
+    setUserName(userName)
+    setShowImages(showImages)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+  const updateProviderConfig = (provider: AIProvider, updates: any) => {
+    const newProviders = { ...config.providers }
+    newProviders[provider] = { ...newProviders[provider], ...updates }
+    setConfig({ ...config, providers: newProviders })
+  }
 
   const handleImport = async (e: Event) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -25,7 +36,7 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
     if (!confirm("确定导入吗？这将覆盖所有数据。")) return;
     setImporting(true);
     try { await importDatabase(file); alert("导入成功！"); location.reload(); }
-    catch (e: any) { alert("导入失败: " + e.message); }
+    catch (e: any) { alert("导入失败：" + e.message); }
     finally { setImporting(false); }
   }
 
@@ -40,6 +51,23 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
       </div>
 
       <Card class="mb-4">
+        <CardHeader><CardTitle>0. 个人设置</CardTitle></CardHeader>
+        <CardContent class="space-y-4">
+          <div>
+            <label class="block font-medium mb-1">我的昵称</label>
+            <input
+              type="text"
+              value={userName}
+              onInput={e => setUserNameState((e.target as HTMLInputElement).value)}
+              class="w-full px-3 py-2 rounded-lg border border-border bg-surface focus:ring-1 focus:ring-accent"
+              placeholder="用户在聊天中的显示名称"
+            />
+            <p class="text-xs text-muted mt-1">AI 和朋友会在聊天中看到这个名字</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card class="mb-4">
         <CardHeader><CardTitle>1. 对话后端 (Chat)</CardTitle></CardHeader>
         <CardContent class="space-y-4">
           <div>
@@ -48,12 +76,26 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
               <option value="zhipu">智谱 AI (GLM)</option>
               <option value="google">Google (Gemma/Gemini)</option>
               <option value="groq">Groq (Llama)</option>
+              <option value="volcengine">火山引擎 (豆包)</option>
+              <option value="modelscope">魔搭 (通义千问)</option>
+              <option value="tencent">腾讯混元 (免费)</option>
             </select>
           </div>
           <div class="p-3 rounded-lg bg-surface-hover border border-border space-y-4">
             <div>
               <label class="block font-medium mb-1 text-xs">API Key</label>
               <input type="password" value={currentChat.apiKey} onInput={e => updateProviderConfig(activeProvider, { apiKey: (e.target as HTMLInputElement).value })} class="w-full px-3 py-2 rounded-lg border border-border bg-surface focus:ring-1 focus:ring-accent" placeholder="API Key" />
+            </div>
+            <div>
+              <label class="block font-medium mb-1 text-xs">Base URL (可选)</label>
+              <input
+                type="text"
+                value={currentChat.baseUrl || ""}
+                onInput={e => updateProviderConfig(activeProvider, { baseUrl: (e.target as HTMLInputElement).value })}
+                class="w-full px-3 py-2 rounded-lg border border-border bg-surface focus:ring-1 focus:ring-accent"
+                placeholder="默认使用官方 API 地址"
+              />
+              <p class="text-xs text-muted mt-1">如需使用代理或私有部署可在此填写</p>
             </div>
             <div>
               <label class="block font-medium mb-1 text-xs">对话模型</label>
@@ -77,10 +119,27 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
           {imageProvider === 'zhipu' && (
             <div class="p-3 rounded-lg bg-surface-hover border border-border space-y-4">
               <div>
+                <label class="block font-medium mb-1 text-xs">Base URL (可选)</label>
+                <input
+                  type="text"
+                  value={currentImage.baseUrl || ""}
+                  onInput={e => updateProviderConfig('zhipu', { baseUrl: (e.target as HTMLInputElement).value })}
+                  class="w-full px-3 py-2 rounded-lg border border-border bg-surface focus:ring-1 focus:ring-accent"
+                  placeholder="默认使用官方 API 地址"
+                />
+              </div>
+              <div>
                 <label class="block font-medium mb-1 text-xs">尺寸</label>
                 <select value={currentImage.imageSize} onChange={e => updateProviderConfig('zhipu', { imageSize: (e.target as HTMLSelectElement).value })} class="w-full p-1.5 rounded border border-border bg-surface text-xs">
                   <option value="1280x1280">1:1 (1280)</option>
                   <option value="1024x1024">1:1 (1024)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-medium mb-1 text-xs">图像清晰度</label>
+                <select value={currentImage.imageQuality || "hd"} onChange={e => updateProviderConfig('zhipu', { imageQuality: (e.target as HTMLSelectElement).value as "hd" | "standard" })} class="w-full p-1.5 rounded border border-border bg-surface text-xs">
+                  <option value="hd">高清 (HD)</option>
+                  <option value="standard">标准</option>
                 </select>
               </div>
             </div>

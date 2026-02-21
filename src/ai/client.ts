@@ -88,15 +88,19 @@ interface ChatMessage {
   content: string | any[];
 }
 
-function buildMessages(cid: string, umsg: string, friendId: string): ChatMessage[] {
+function buildMessages(
+  cid: string,
+  umsg: string,
+  friendId: string,
+): ChatMessage[] {
   const all = getMessages(cid, 200); // 获取最近 200 条消息
   const userName = getUserName();
-  
+
   // 计算 token 限制（约 10000 字符）
   const MAX_CHARS = 10000;
   let totalChars = 0;
   const limitedMsgs: typeof all = [];
-  
+
   // 从后往前遍历，保留最近的消息直到达到字符限制
   for (let i = all.length - 1; i >= 0; i--) {
     const m = all[i];
@@ -107,7 +111,7 @@ function buildMessages(cid: string, umsg: string, friendId: string): ChatMessage
     }
     limitedMsgs.unshift(m);
   }
-  
+
   const msgs: ChatMessage[] = limitedMsgs.map((m) => {
     if (m.senderId === "user") {
       // 用户消息：role=user，内容为 [昵称]: 内容
@@ -117,10 +121,14 @@ function buildMessages(cid: string, umsg: string, friendId: string): ChatMessage
       return { role: "assistant", name: m.senderName, content: m.content };
     } else {
       // 群聊中其他角色的消息：role=assistant，name=角色名，content=[角色名]: 内容
-      return { role: "assistant", name: m.senderName, content: `[${m.senderName}]: ${m.content}` };
+      return {
+        role: "assistant",
+        name: m.senderName,
+        content: `[${m.senderName}]: ${m.content}`,
+      };
     }
   });
-  
+
   if (umsg) {
     // 当前用户消息也加上标识
     msgs.push({ role: "user", content: `[${userName}]: ${umsg}` });
@@ -145,17 +153,17 @@ async function callAI(
       ? baseUrl.replace(/\/$/, "")
       : "https://generativelanguage.googleapis.com/v1beta";
     const endpoint = `${base}/models/${chatModel}:generateContent?key=${apiKey}`;
-    
+
     // Google Gemini 支持 system role
     const apiMessages = [
       {
         role: "system",
-        parts: [{ text: systemPrompt }]
+        parts: [{ text: systemPrompt }],
       },
       ...messages.map((m) => ({
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content as string }],
-      }))
+      })),
     ];
 
     const response = await fetch(endpoint, {
@@ -176,12 +184,12 @@ async function callAI(
       userContent.push({ type: "image_url", image_url: { url: img } });
   }
 
-  // 腾讯混元使用不同的端点和认证方式
+  // 腾讯混元使用 OpenAI 兼容格式
   if (provider === "tencent") {
     const endpoint = baseUrl
       ? `${baseUrl.replace(/\/$/, "")}/chat/completions`
-      : "https://hunyuan.tencentcloudapi.com/chat/completions";
-    
+      : "https://api.hunyuan.cloud.tencent.com/v1/chat/completions";
+
     const apiMessages = [
       { role: "system", content: systemPrompt },
       ...messages
@@ -194,18 +202,18 @@ async function callAI(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        Model: chatModel,
-        Messages: apiMessages,
-        Temperature: 0.8,
+        model: chatModel,
+        messages: apiMessages,
+        temperature: 0.8,
       }),
     });
     if (!response.ok)
       throw new Error(`腾讯混元 API 错误：${await response.text()}`);
     const data = await response.json();
-    return data.Choices?.[0]?.Message?.Content?.trim() || data.choices?.[0]?.message?.content?.trim() || "";
+    return data.choices?.[0]?.message?.content?.trim() || "";
   }
 
   const endpoint =
@@ -294,7 +302,7 @@ async function generateReplyWithAgent(
   umsg: string,
   imgs: string[],
   onReply?: (m: Message) => void,
-  depth = 0
+  depth = 0,
 ): Promise<void> {
   if (depth > 2) return;
   const config = getAppConfig();
@@ -317,7 +325,7 @@ async function generateReplyWithAgent(
   let content = reply;
   const continueIndex = content.indexOf("[CONTINUE]");
   let hasContinue = continueIndex !== -1;
-  
+
   if (hasContinue && continueIndex !== -1) {
     const afterContinue = content.substring(continueIndex + 10).trim();
     // 如果 [CONTINUE] 后面还有实质性内容，说明 AI 把多条消息合并了
@@ -442,7 +450,7 @@ export async function generateReplies(
       const checkInterval = 500; // 每 0.5 秒检查一次
       const checks = delayMs / checkInterval;
       for (let j = 0; j < checks; j++) {
-        await new Promise(r => setTimeout(r, checkInterval));
+        await new Promise((r) => setTimeout(r, checkInterval));
         // 检查是否有用户新消息
         const newMsgCount = getMessages(cid, 1, 0).length;
         if (newMsgCount !== initialMsgCount) {

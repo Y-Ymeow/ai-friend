@@ -145,20 +145,18 @@ async function callAI(
       ? baseUrl.replace(/\/$/, "")
       : "https://generativelanguage.googleapis.com/v1beta";
     const endpoint = `${base}/models/${chatModel}:generateContent?key=${apiKey}`;
-    const apiMessages = messages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [
-        {
-          text: (m.role === "system"
-            ? `SYSTEM: ${m.content}`
-            : m.content) as string,
-        },
-      ],
-    }));
-    apiMessages.unshift({
-      role: "user",
-      parts: [{ text: `SYSTEM INSTRUCTION: ${systemPrompt}` }],
-    });
+    
+    // Google Gemini 支持 system role
+    const apiMessages = [
+      {
+        role: "system",
+        parts: [{ text: systemPrompt }]
+      },
+      ...messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content as string }],
+      }))
+    ];
 
     const response = await fetch(endpoint, {
       method: "POST",

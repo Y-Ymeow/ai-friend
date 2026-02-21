@@ -197,7 +197,7 @@ export const ChatArea: FunctionalComponent<Props> = ({
                       "absolute top-1/2 -translate-y-1/2 flex gap-1 transition-all duration-200",
                       "opacity-0 group-hover:opacity-100",
                       isActionMenuOpen ? "opacity-100" : "",
-                      isUser ? "-right-10 left-auto" : "-left-10 right-auto"
+                      isUser ? "-left-10" : "-right-10"
                     )}>
                       {/* 用户消息显示重试按钮（重试 AI 回复） */}
                       {isUser && onRetry && (

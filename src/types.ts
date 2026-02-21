@@ -4,8 +4,7 @@ export type AIProvider =
   | "google"
   | "groq"
   | "volcengine"
-  | "modelscope"
-  | "tencent";
+  | "modelscope";
 
 export interface AIProviderConfig {
   provider: AIProvider;
@@ -78,26 +77,6 @@ export const CHAT_MODELS: Record<AIProvider, any[]> = {
     { id: "doubao-pro-32k", name: "豆包 Pro", supportsVision: false },
   ],
   modelscope: [{ id: "qwen-max", name: "通义千问", supportsVision: false }],
-  tencent: [
-    {
-      id: "hunyuan-lite",
-      name: "腾讯混元 Lite",
-      desc: "免费额度",
-      supportsVision: false,
-    },
-    {
-      id: "hunyuan-standard",
-      name: "腾讯混元 Standard",
-      desc: "标准版",
-      supportsVision: false,
-    },
-    {
-      id: "hunyuan-pro",
-      name: "腾讯混元 Pro",
-      desc: "专业版",
-      supportsVision: false,
-    },
-  ],
 };
 
 export const IMAGE_MODELS: Record<AIProvider, { id: string; name: string }[]> =
@@ -107,7 +86,6 @@ export const IMAGE_MODELS: Record<AIProvider, { id: string; name: string }[]> =
     volcengine: [],
     groq: [],
     modelscope: [],
-    tencent: [],
   };
 
 // === 核心类型 ===

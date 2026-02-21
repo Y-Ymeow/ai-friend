@@ -169,12 +169,23 @@ export function getAppConfig(): AppConfig {
       groq: { provider: 'groq', apiKey: '', chatModel: 'llama-3.3-70b-versatile' },
       volcengine: { provider: 'volcengine', apiKey: '', chatModel: 'doubao-pro-32k' },
       modelscope: { provider: 'modelscope', apiKey: '', chatModel: 'qwen-max' },
-      tencent: { provider: 'tencent', apiKey: '', chatModel: 'hunyuan-lite' },
     },
     imageGenerationEnabled: false
   };
   if (!s) return def;
-  try { const p = JSON.parse(s); return { ...def, ...p, providers: { ...def.providers, ...p.providers } }; } catch { return def; }
+  try {
+    const p = JSON.parse(s);
+    const merged = { ...def, ...p, providers: { ...def.providers, ...p.providers } };
+    // 验证 activeProvider 是否有效，无效则使用默认值
+    const validProviders = Object.keys(def.providers);
+    if (!merged.activeProvider || !validProviders.includes(merged.activeProvider)) {
+      merged.activeProvider = 'zhipu';
+    }
+    if (!merged.imageProvider || !validProviders.includes(merged.imageProvider)) {
+      merged.imageProvider = 'zhipu';
+    }
+    return merged;
+  } catch { return def; }
 }
 
 export function setAppConfig(c: AppConfig) { localStorage.setItem("app_config", JSON.stringify(c)); }

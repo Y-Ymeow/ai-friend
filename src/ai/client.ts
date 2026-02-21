@@ -194,9 +194,7 @@ async function callAI(
           ? "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
           : provider === "modelscope"
             ? "https://api.modelscope.cn/api/v1/chat/completions"
-            : provider === "tencent"
-              ? "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
-              : "");
+            : "");
 
   const apiMessages = [
     { role: "system", content: systemPrompt },

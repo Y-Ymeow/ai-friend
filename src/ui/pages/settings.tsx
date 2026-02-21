@@ -78,7 +78,6 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
               <option value="groq">Groq (Llama)</option>
               <option value="volcengine">火山引擎 (豆包)</option>
               <option value="modelscope">魔搭 (通义千问)</option>
-              <option value="tencent">腾讯混元 (免费)</option>
             </select>
           </div>
           <div class="p-3 rounded-lg bg-surface-hover border border-border space-y-4">
@@ -86,6 +85,7 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
               <label class="block font-medium mb-1 text-xs">API Key</label>
               <input type="password" value={currentChat.apiKey} onInput={e => updateProviderConfig(activeProvider, { apiKey: (e.target as HTMLInputElement).value })} class="w-full px-3 py-2 rounded-lg border border-border bg-surface focus:ring-1 focus:ring-accent" placeholder="API Key" />
             </div>
+
             <div>
               <label class="block font-medium mb-1 text-xs">Base URL (可选)</label>
               <input

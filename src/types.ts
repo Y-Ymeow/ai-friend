@@ -5,7 +5,7 @@ export type AIProvider =
   | "groq"
   | "volcengine"
   | "modelscope"
-  | "custom";
+  | string; // 支持自定义 provider ID
 
 export interface AIProviderConfig {
   provider: AIProvider;

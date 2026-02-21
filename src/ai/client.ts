@@ -76,10 +76,11 @@ ${memoryContext}
 
 【回复规范】
 1. 真人社交语境回复，简短随性，像真人聊天一样。
-2. 支持 [CONTINUE] 表示连发消息。
+2. 支持 [CONTINUE] 表示连发消息（仅用于表示还有话要说，不要在 [CONTINUE] 后面写具体内容）
 3. 支持 [GEN_IMAGE: 描述词] 主动分享图片（描述词用中文，尽量详细）。
 4. 群聊时，请根据上下文判断对话对象，自然参与讨论。
-5. 当对方提到重要信息（喜好、生日、约定、经历等），使用 [SAVE_MEMORY: ...] 记录下来`;
+5. 当对方提到重要信息（喜好、生日、约定、经历等），使用 [SAVE_MEMORY: ...] 记录下来
+6. 不要在一条回复里写多条消息的内容，每次只回复一条消息`;
 }
 
 interface ChatMessage {
@@ -315,9 +316,24 @@ async function generateReplyWithAgent(
   );
   if (!reply) return;
 
+  // 处理 CONTINUE: 如果 [CONTINUE] 后面还有内容，说明 AI 把多条消息合并成一条了
+  // 这时只处理第一条消息，忽略后续的（下次请求时会重新获取历史，AI 会看到自己刚发的消息）
   let content = reply;
-  let shouldContinue = content.includes("[CONTINUE]");
-  content = content.replace("[CONTINUE]", "").trim();
+  const continueIndex = content.indexOf("[CONTINUE]");
+  let hasContinue = continueIndex !== -1;
+  
+  if (hasContinue && continueIndex !== -1) {
+    const afterContinue = content.substring(continueIndex + 10).trim();
+    // 如果 [CONTINUE] 后面还有实质性内容，说明 AI 把多条消息合并了
+    if (afterContinue && afterContinue.length > 20) {
+      // 只保留 [CONTINUE] 之前的内容
+      content = content.substring(0, continueIndex).trim();
+      console.log("[AI] 检测到 AI 把多条消息合并，已截断处理");
+    } else {
+      // 正常的 CONTINUE，移除标记
+      content = content.replace("[CONTINUE]", "").trim();
+    }
+  }
 
   let imgPrompt = "";
   const match = content.match(/\[GEN_IMAGE:\s*(.*?)\]/);
@@ -376,7 +392,7 @@ async function generateReplyWithAgent(
     updateConversationLastMessage(cid, msg.content);
     updateFriendStats(fid, 2, 3);
     if (onReply) onReply(msg);
-    if (shouldContinue) {
+    if (hasContinue) {
       await new Promise((r) => setTimeout(r, 2000));
       // CONTINUE 时传入空字符串，让 AI 基于最新历史（包含刚发的消息）回复
       await generateReplyWithAgent(cid, fid, "", [], onReply, depth + 1, isGroupChat);

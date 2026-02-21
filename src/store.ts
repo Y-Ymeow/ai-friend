@@ -15,6 +15,8 @@ import {
   getMemories,
   createMemory as dbCreateMemory,
   deleteMemory as dbDeleteMemory,
+  deleteMessage as dbDeleteMessage,
+  clearConversationMessages as dbClearConversationMessages,
 } from "./db/db";
 import {
   generateReplies,
@@ -476,6 +478,19 @@ export function resetAllData() {
   dbResetAll();
   refreshAll();
   currentConversationId.value = null;
+}
+
+export function deleteMessage(msgId: string) {
+  dbDeleteMessage(msgId);
+  refreshMessages();
+  refreshConversations();
+}
+
+export function clearChat(convId: string) {
+  if (!confirm("确定要清空当前聊天记录吗？")) return;
+  dbClearConversationMessages(convId);
+  refreshMessages();
+  refreshConversations();
 }
 
 export { isGenerating, generatingFriendIds, generateFriendState };

@@ -140,11 +140,21 @@ export function getMessages(cid: string, limit = 20, offset = 0): Message[] {
 export function createMessage(msg: Omit<Message, "id">): Message {
   const id = `msg_${Date.now()}`;
   db!.run(`INSERT INTO messages (id, conversation_id, sender_id, sender_name, content, timestamp, status, images) VALUES (
-    '${id}', '${msg.conversationId}', '${msg.senderId}', '${msg.senderName.replace(/'/g, "''")}', 
+    '${id}', '${msg.conversationId}', '${msg.senderId}', '${msg.senderName.replace(/'/g, "''")}',
     '${msg.content.replace(/'/g, "''")}', ${msg.timestamp}, '${msg.status}', '${msg.images ? JSON.stringify(msg.images).replace(/'/g, "''") : ""}'
   )`);
   saveDb();
   return { ...msg, id };
+}
+
+export function deleteMessage(msgId: string): void {
+  db!.run(`DELETE FROM messages WHERE id='${msgId}'`);
+  saveDb();
+}
+
+export function clearConversationMessages(cid: string): void {
+  db!.run(`DELETE FROM messages WHERE conversation_id='${cid}'`);
+  saveDb();
 }
 
 // === 核心逻辑补充 ===

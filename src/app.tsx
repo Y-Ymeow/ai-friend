@@ -6,7 +6,8 @@ import {
   selectConversation, sendUserMessage, resetAllData,
   deleteFriend, deleteConversation,
   isGenerating, generatingFriendIds, isWaiting, notifyTyping,
-  startAppServices, retryAIResponse, refreshMessages
+  startAppServices, retryAIResponse, refreshMessages,
+  deleteMessage, clearChat
 } from "./store"
 import { navigate, currentPage, routeParams, initRouter } from "./router"
 import { Sidebar } from "./ui/components/sidebar"
@@ -94,6 +95,16 @@ export function App() {
     }
   }, [])
 
+  const handleDeleteMessage = useCallback((msgId: string) => {
+    deleteMessage(msgId)
+  }, [])
+
+  const handleClearChat = useCallback(() => {
+    if (currentConversationId.value) {
+      clearChat(currentConversationId.value)
+    }
+  }, [])
+
   const handleReset = useCallback(() => {
     resetAllData()
     navigate('home')
@@ -148,6 +159,8 @@ export function App() {
           onShowDetail={(id) => navigate('friend-detail', { id })}
           onLoadMore={(limit, offset) => refreshMessages(limit, offset)}
           onRetry={retryAIResponse}
+          onDeleteMessage={handleDeleteMessage}
+          onClearChat={handleClearChat}
           disabled={isGenerating.value}
           onOpenSidebar={() => setShowSidebar(true)}
         />

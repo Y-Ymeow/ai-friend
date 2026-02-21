@@ -17,19 +17,23 @@ interface Props {
   onShowDetail?: (friendId: string) => void
   onLoadMore?: (limit: number, offset: number) => void
   onRetry?: () => void
+  onDeleteMessage?: (msgId: string) => void
+  onClearChat?: () => void
   disabled?: boolean
   onOpenSidebar: () => void
 }
 
 export const ChatArea: FunctionalComponent<Props> = ({
-  conversation, messages, friends, generatingIds, isWaiting, onSend, onTyping, onShowDetail, onLoadMore, onRetry, disabled, onOpenSidebar
+  conversation, messages, friends, generatingIds, isWaiting, onSend, onTyping, onShowDetail, onLoadMore, onRetry, onDeleteMessage, onClearChat, disabled, onOpenSidebar
 }) => {
   const [text, setText] = useState("")
   const [images, setImages] = useState<string[]>([])
   const [offset, setOffset] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [aiImageGen, setAiImageGen] = useState(getAppConfig().imageGenerationEnabled)
-  
+  const [showActionMenu, setShowActionMenu] = useState<string | null>(null)
+  const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
+
   const showImages = getShowImages()
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -79,6 +83,22 @@ export const ChatArea: FunctionalComponent<Props> = ({
     ;(e.target as HTMLInputElement).value = ''
   }
 
+  // 长按开始（手机端）
+  const handleLongPressStart = (msgId: string) => {
+    const timer = setTimeout(() => {
+      setShowActionMenu(msgId === showActionMenu ? null : msgId)
+    }, 500)
+    setLongPressTimer(timer)
+  }
+
+  // 长按结束（手机端）
+  const handleLongPressEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
+    }
+  }
+
   const getTitle = (): string => {
     if (!conversation) return 'AI 朋友'
     if (conversation.name) return conversation.name
@@ -98,19 +118,30 @@ export const ChatArea: FunctionalComponent<Props> = ({
 
   return (
     <div class="h-dvh flex flex-col bg-background">
-      <header class="fixed lg:relative top-0 left-0 right-0 lg:left-auto lg:right-auto lg:top-auto z-20 h-12 px-3 flex items-center gap-2 border-b border-border bg-background">
-        <button class="lg:hidden text-xl text-muted hover:text-white" onClick={onOpenSidebar}>☰</button>
-        {conversation && getTitleAvatar() && (
-          <div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-            <img src={getTitleAvatar()!} alt={getTitle()} class="w-full h-full object-cover" />
-          </div>
+      <header class="fixed lg:relative top-0 left-0 right-0 lg:left-auto lg:right-auto lg:top-auto z-20 h-12 px-3 flex items-center justify-between border-b border-border bg-background">
+        <div class="flex items-center gap-2">
+          <button class="lg:hidden text-xl text-muted hover:text-white" onClick={onOpenSidebar}>☰</button>
+          {conversation && getTitleAvatar() && (
+            <div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+              <img src={getTitleAvatar()!} alt={getTitle()} class="w-full h-full object-cover" />
+            </div>
+          )}
+          <h1
+            class={cn("font-semibold truncate", conversation?.type === 'private' && "cursor-pointer hover:text-accent")}
+            onClick={() => conversation?.type === 'private' && onShowDetail?.(conversation.friendIds[0])}
+          >
+            {getTitle()}
+          </h1>
+        </div>
+        {conversation && (
+          <button
+            onClick={onClearChat}
+            class="text-sm text-muted hover:text-danger transition-colors px-2 py-1"
+            title="清空聊天记录"
+          >
+            🗑️
+          </button>
         )}
-        <h1
-          class={cn("font-semibold truncate", conversation?.type === 'private' && "cursor-pointer hover:text-accent")}
-          onClick={() => conversation?.type === 'private' && onShowDetail?.(conversation.friendIds[0])}
-        >
-          {getTitle()}
-        </h1>
       </header>
 
       <div class="flex-1 overflow-y-auto overflow-x-hidden p-4 pt-14 lg:pt-4 space-y-3">
@@ -129,43 +160,70 @@ export const ChatArea: FunctionalComponent<Props> = ({
             const isUser = msg.senderId === 'user'
             const friend = friends.find(f => f.id === msg.senderId)
             const isTyping = generatingIds.has(msg.senderId)
+            const isActionMenuOpen = showActionMenu === msg.id
 
             return (
-              <div key={msg.id} class={cn("flex gap-2 group", isUser && "flex-row-reverse")}>
-                <div class={cn("w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm overflow-hidden", isUser ? "bg-accent text-white" : "bg-surface-hover")}>
-                  {isUser ? '我' : friend?.avatar ? <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" /> : (friend?.name || '友').charAt(0)}
-                </div>
-                <div class={cn("max-w-[85%] rounded-2xl px-3 py-2 relative", isUser ? "bg-accent text-white rounded-tr-sm" : "bg-surface-hover rounded-tl-sm")}>
-                  {!isUser && (
-                    <div class="text-xs text-muted mb-1 flex items-center gap-2">
-                      {friend?.name || msg.senderName}
-                      {isTyping && <span class="text-accent animate-pulse">正在输入...</span>}
+              <div key={msg.id} class="relative group">
+                <div class={cn("flex gap-2", isUser && "flex-row-reverse")}>
+                  <div class={cn("w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm overflow-hidden", isUser ? "bg-accent text-white" : "bg-surface-hover")}>
+                    {isUser ? '我' : friend?.avatar ? <img src={friend.avatar} alt={friend.name} class="w-full h-full object-cover" /> : (friend?.name || '友').charAt(0)}
+                  </div>
+                  <div
+                    class={cn("max-w-[85%] rounded-2xl px-3 py-2 relative", isUser ? "bg-accent text-white rounded-tr-sm" : "bg-surface-hover rounded-tl-sm")}
+                    // 手机端长按支持
+                    onTouchStart={() => handleLongPressStart(msg.id)}
+                    onTouchEnd={handleLongPressEnd}
+                    onMouseDown={() => handleLongPressStart(msg.id)}
+                    onMouseUp={handleLongPressEnd}
+                    onMouseLeave={handleLongPressEnd}
+                  >
+                    {!isUser && (
+                      <div class="text-xs text-muted mb-1 flex items-center gap-2">
+                        {friend?.name || msg.senderName}
+                        {isTyping && <span class="text-accent animate-pulse">正在输入...</span>}
+                      </div>
+                    )}
+                    {msg.images && msg.images.length > 0 && showImages && (
+                      <div class="flex flex-wrap gap-1 mb-1">
+                        {msg.images.map((img, i) => (
+                          <img key={i} src={img} class="max-w-[180px] max-h-[240px] rounded-lg cursor-zoom-in border border-border/50" onClick={() => setPreviewUrl(img)} />
+                        ))}
+                      </div>
+                    )}
+                    {msg.content && <p class="text-sm whitespace-pre-wrap break-words">{msg.content}</p>}
+
+                    {/* 消息操作按钮 - 桌面端悬停显示，手机端长按显示 */}
+                    <div class={cn(
+                      "absolute -bottom-8 left-1/2 -translate-x-1/2 flex gap-1 transition-all duration-200",
+                      "opacity-0 group-hover:opacity-100",
+                      isActionMenuOpen ? "opacity-100" : ""
+                    )}>
+                      {!isUser && onRetry && (
+                        <button
+                          onClick={() => { onRetry?.(); setShowActionMenu(null) }}
+                          class="px-2 py-1 bg-surface border border-border rounded-md text-xs text-muted hover:text-accent hover:border-accent transition-colors shadow-lg"
+                          title="重试此消息"
+                        >
+                          🔄 重试
+                        </button>
+                      )}
+                      {onDeleteMessage && (
+                        <button
+                          onClick={() => { onDeleteMessage(msg.id); setShowActionMenu(null) }}
+                          class="px-2 py-1 bg-surface border border-border rounded-md text-xs text-muted hover:text-danger hover:border-danger transition-colors shadow-lg"
+                          title="删除消息"
+                        >
+                          🗑️ 删除
+                        </button>
+                      )}
                     </div>
-                  )}
-                  {msg.images && msg.images.length > 0 && showImages && (
-                    <div class="flex flex-wrap gap-1 mb-1">
-                      {msg.images.map((img, i) => (
-                        <img key={i} src={img} class="max-w-[180px] max-h-[240px] rounded-lg cursor-zoom-in border border-border/50" onClick={() => setPreviewUrl(img)} />
-                      ))}
-                    </div>
-                  )}
-                  {msg.content && <p class="text-sm whitespace-pre-wrap break-words">{msg.content}</p>}
-                  
-                  {isUser && onRetry && (
-                    <button 
-                      onClick={onRetry} 
-                      class="absolute -left-10 top-1/2 -translate-y-1/2 p-2 text-muted opacity-0 group-hover:opacity-100 hover:text-accent transition-all text-lg"
-                      title="重试 AI 响应"
-                    >
-                      🔄
-                    </button>
-                  )}
+                  </div>
                 </div>
               </div>
             )
           })
         )}
-        
+
         {generatingIds.size > 0 && (
           <div class="text-center text-muted text-xs italic py-2">
             {[...generatingIds].map(id => friends.find(f => f.id === id)?.name).filter(Boolean).join('、')} 正在思考...
@@ -174,6 +232,14 @@ export const ChatArea: FunctionalComponent<Props> = ({
         {isWaiting && <div class="text-center text-muted text-xs italic py-2">正在等待更多输入 (3s)...</div>}
         <div ref={bottomRef} />
       </div>
+
+      {/* 点击空白处关闭操作菜单 */}
+      {showActionMenu && (
+        <div
+          class="fixed inset-0 z-30"
+          onClick={() => setShowActionMenu(null)}
+        />
+      )}
 
       {images.length > 0 && (
         <div class="flex-shrink-0 px-3 py-2 flex gap-2 flex-wrap border-t border-border bg-surface/50">
@@ -198,11 +264,11 @@ export const ChatArea: FunctionalComponent<Props> = ({
 
       <div class="flex-shrink-0 p-3 border-t border-border flex gap-2 items-end bg-background">
         <input ref={fileRef} type="file" accept="image/*" multiple class="hidden" onChange={handleFiles} />
-        
+
         <div class="flex gap-1">
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             class={cn("rounded-full", aiImageGen ? "text-accent border-accent bg-accent/10" : "text-muted")}
             onClick={toggleAiImageGen}
             title={aiImageGen ? "AI 生图已开启" : "AI 生图已关闭"}

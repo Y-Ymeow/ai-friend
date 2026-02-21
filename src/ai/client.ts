@@ -17,7 +17,7 @@ import {
   type Friend,
   type AIProviderConfig,
 } from "../types";
-import { loadPromptConfig, buildSystemPrompt as buildPrompt } from "./prompts";
+import { loadPromptConfig, buildSystemPrompt as buildPrompt, buildMemoryInfo } from "./prompts";
 
 // === 状态 ===
 export const isGenerating = signal(false);
@@ -31,10 +31,14 @@ function buildSystemPrompt(friend: Friend, userName: string = "用户"): string 
   // 添加记忆
   const memories = getMemories(friend.id).slice(0, 10)
   if (memories.length > 0) {
-    const memoryContext = `\n你记得：\n${memories.map((m) => `- ${m.content}`).join("\n")}`
+    const memoryContext = buildMemoryInfo(memories.map(m => ({
+      content: m.content,
+      timestamp: m.timestamp,
+      type: m.type
+    })))
     return basePrompt + memoryContext
   }
-
+  
   return basePrompt
 }
 

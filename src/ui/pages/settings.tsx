@@ -4,6 +4,7 @@ import { Button } from "../components/button"
 import { Card, CardHeader, CardTitle, CardContent } from "../components/card"
 import { getAppConfig, setAppConfig, exportDatabase, importDatabase, clearDatabase, getShowImages, setShowImages, getUserName, setUserName } from "../../db/db"
 import { CHAT_MODELS, type AIProvider, type AppConfig, type CustomModel } from "../../types"
+import { DEFAULT_PROMPTS, type PromptConfig } from "../../ai/prompts"
 
 interface Props { onBack: () => void; onReset: () => void }
 
@@ -37,7 +38,7 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
   const [activeTab, setActiveTab] = useState<SettingsTab>('basic')
   const fileRef = useRef<HTMLInputElement>(null)
   
-  const [prompts, setPrompts] = useState(() => {
+  const [prompts, setPrompts] = useState<PromptConfig>(() => {
     const saved = localStorage.getItem("custom_prompts")
     return saved ? JSON.parse(saved) : DEFAULT_PROMPTS
   })
@@ -581,16 +582,18 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
                 <textarea
                   value={prompts.systemPrefix}
                   onInput={e => setPrompts({ ...prompts, systemPrefix: (e.target as HTMLTextAreaElement).value })}
-                  class="w-full p-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-accent text-xs h-32 font-mono"
+                  class="w-full p-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-accent text-xs h-48 font-mono whitespace-pre-wrap"
                 />
+                <p class="text-xs text-muted mt-1">包含角色扮演指令、角色信息等，会动态插入时间、角色数据</p>
               </div>
               <div>
                 <label class="block font-medium mb-1 text-xs">提示词后缀</label>
                 <textarea
                   value={prompts.systemSuffix}
                   onInput={e => setPrompts({ ...prompts, systemSuffix: (e.target as HTMLTextAreaElement).value })}
-                  class="w-full p-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-accent text-xs h-32 font-mono"
+                  class="w-full p-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-accent text-xs h-48 font-mono whitespace-pre-wrap"
                 />
+                <p class="text-xs text-muted mt-1">包含对话方式、特殊标记说明等</p>
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -600,6 +603,7 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
                     value={prompts.autoReplyPrefix}
                     onInput={e => setPrompts({ ...prompts, autoReplyPrefix: (e.target as HTMLInputElement).value })}
                     class="w-full px-3 py-2 rounded-lg border border-border bg-surface text-xs font-mono"
+                    placeholder="("
                   />
                 </div>
                 <div>
@@ -609,9 +613,21 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
                     value={prompts.autoReplySuffix}
                     onInput={e => setPrompts({ ...prompts, autoReplySuffix: (e.target as HTMLInputElement).value })}
                     class="w-full px-3 py-2 rounded-lg border border-border bg-surface text-xs font-mono"
+                    placeholder=")"
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader><CardTitle>💡 使用说明</CardTitle></CardHeader>
+            <CardContent class="text-xs text-muted space-y-2">
+              <p>• 系统提示词由 <strong>前缀 + 角色信息 + 后缀</strong> 组成</p>
+              <p>• 角色信息是动态生成的，包含：时间、性格、心情、身体状况、穿着、外貌、关系、基本数据（性别/身高/体重/年龄）</p>
+              <p>• 记忆信息会自动附加到提示词末尾，每条记忆带有时间戳</p>
+              <p>• 修改后记得点击底部的"保存所有配置"按钮</p>
+              <p>• 点击"恢复默认"可以重置为初始配置</p>
             </CardContent>
           </Card>
         </div>

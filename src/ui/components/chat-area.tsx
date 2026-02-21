@@ -201,19 +201,19 @@ export const ChatArea: FunctionalComponent<Props> = ({
                       {!isUser && onRetry && (
                         <button
                           onClick={() => { onRetry?.(); setShowActionMenu(null) }}
-                          class="px-2 py-1 bg-surface border border-border rounded-md text-xs text-muted hover:text-accent hover:border-accent transition-colors shadow-lg"
-                          title="重试此消息"
+                          class="w-8 h-8 flex items-center justify-center bg-surface border border-border rounded-full text-sm text-muted hover:text-accent hover:border-accent transition-colors shadow-lg"
+                          title="重试"
                         >
-                          🔄 重试
+                          🔄
                         </button>
                       )}
                       {onDeleteMessage && (
                         <button
                           onClick={() => { onDeleteMessage(msg.id); setShowActionMenu(null) }}
-                          class="px-2 py-1 bg-surface border border-border rounded-md text-xs text-muted hover:text-danger hover:border-danger transition-colors shadow-lg"
-                          title="删除消息"
+                          class="w-8 h-8 flex items-center justify-center bg-surface border border-border rounded-full text-sm text-muted hover:text-danger hover:border-danger transition-colors shadow-lg"
+                          title="删除"
                         >
-                          🗑️ 删除
+                          ❌
                         </button>
                       )}
                     </div>

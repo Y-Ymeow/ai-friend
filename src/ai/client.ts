@@ -89,9 +89,13 @@ function buildMessages(
     }
   });
 
+  // 检查 umsg 是否已经在历史消息中（最后 3 条用户消息），避免重复
   if (umsg) {
-    // 当前用户消息也加上标识
-    msgs.push({ role: "user", content: `[${userName}]: ${umsg}` });
+    const recentUserMsgs = limitedMsgs.filter(m => m.senderId === "user").slice(-3);
+    const isDuplicate = recentUserMsgs.some(m => m.content === umsg);
+    if (!isDuplicate) {
+      msgs.push({ role: "user", content: `[${userName}]: ${umsg}` });
+    }
   }
   return msgs;
 }

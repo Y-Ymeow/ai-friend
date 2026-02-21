@@ -218,7 +218,24 @@ async function generateImage(prompt: string): Promise<string> {
 }
 
 export async function generateAvatar(friend: Friend): Promise<string> {
-  const prompt = `生成${friend.name}的二次元头像。性格：${friend.personality}。外貌描述：${friend.appearance}。正面肖像，简洁背景，二次元形象。`;
+  // 构建基本数据描述
+  const basicInfo: string[] = []
+  if (friend.gender) {
+    basicInfo.push(`性别：${friend.gender === "female" ? "女性" : friend.gender === "male" ? "男性" : "其他"}`)
+  }
+  if (friend.height) {
+    basicInfo.push(`身高：${friend.height}cm`)
+  }
+  if (friend.weight) {
+    basicInfo.push(`体重：${friend.weight}kg`)
+  }
+  if (friend.age) {
+    basicInfo.push(`年龄：${friend.age}岁`)
+  }
+  
+  const basicInfoStr = basicInfo.length > 0 ? `。基本特征：${basicInfo.join("，")}` : ""
+  
+  const prompt = `生成${friend.name}的二次元头像。性格：${friend.personality}。外貌描述：${friend.appearance}${basicInfoStr}。正面肖像，简洁背景，二次元形象。`;
   return await generateImage(prompt);
 }
 

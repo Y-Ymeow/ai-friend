@@ -3,7 +3,7 @@ import { useState, useRef } from "preact/hooks"
 import { Button } from "../components/button"
 import { Card, CardHeader, CardTitle, CardContent } from "../components/card"
 import { getAppConfig, setAppConfig, exportDatabase, importDatabase, clearDatabase, getShowImages, setShowImages, getUserName, setUserName } from "../../db/db"
-import { CHAT_MODELS, type AIProvider, type AppConfig, type CustomModel } from "../../types"
+import { CHAT_MODELS, type AIProvider, type AppConfig } from "../../types"
 
 interface Props { onBack: () => void; onReset: () => void }
 

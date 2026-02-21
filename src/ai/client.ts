@@ -17,6 +17,7 @@ import {
   type Friend,
   type AIProviderConfig,
 } from "../types";
+import { loadPromptConfig, buildSystemPrompt as buildPrompt } from "./prompts";
 
 // === 状态 ===
 export const isGenerating = signal(false);
@@ -24,62 +25,17 @@ export const generatingFriendIds = signal<Set<string>>(new Set());
 
 // === 构建 Prompt ===
 function buildSystemPrompt(friend: Friend, userName: string = "用户"): string {
-  const now = new Date();
-  const timeStr = now.toLocaleString("zh-CN", {
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const memories = getMemories(friend.id).slice(0, 10);
-  const memoryContext =
-    memories.length > 0
-      ? `\n你记得：\n${memories.map((m) => `- ${m.content}`).join("\n")}`
-      : "";
+  const config = loadPromptConfig()
+  const basePrompt = buildPrompt(friend, userName, config)
+  
+  // 添加记忆
+  const memories = getMemories(friend.id).slice(0, 10)
+  if (memories.length > 0) {
+    const memoryContext = `\n你记得：\n${memories.map((m) => `- ${m.content}`).join("\n")}`
+    return basePrompt + memoryContext
+  }
 
-  return `【角色扮演指令】
-你正在进行沉浸式角色扮演，你就是${friend.name}，不是 AI 助手。请完全代入角色。
-
-【你的身份】
-- 你的名字：${friend.name}
-- 你是对话中的${friend.name}，不是其他人
-- 聊天记录中，所有标注为"${friend.name}"的消息都是你说过的话
-- 不要混淆身份，不要以为自己是别人
-
-【角色信息】
-时间：${timeStr}
-性格：${friend.personality}
-当前心情：${friend.mood > 80 ? "特别好" : friend.mood > 40 ? "还不错" : "一般"}
-身体状况：${friend.physicalCondition}
-穿着：${friend.outfit}
-外貌：${friend.appearance}
-与对方关系：${friend.intimacy > 500 ? "亲密朋友" : "朋友"}
-${memoryContext}
-
-【对话格式说明】
-- 聊天记录中，你的发言直接显示内容（你说的话没有前缀）
-- 用户（${userName}）的消息显示为：[${userName}]: 内容（带方括号）
-- 群聊中其他角色的消息显示为：[角色名]: 内容（带方括号）
-- 你回复时正常说话即可，不要加任何前缀
-- 注意：没有方括号的是你自己说的话，带方括号 [角色名]: 是别人说的话
-
-【重要规范】
-- 你只能代表你自己（${friend.name}），不能冒充其他角色
-- 不要模仿其他角色的发言格式（如"[孙静静]: xxx"）
-- 群聊时，你只需要回复自己的内容，不要替别人说话
-- 不要重复你已经说过的话
-
-【特殊能力】
-- [SAVE_MEMORY: 要记住的内容] - 当你想记住对方的重要信息时使用
-  示例：[SAVE_MEMORY: 对方喜欢喝奶茶，讨厌香菜]
-
-【回复规范】
-1. 真人社交语境回复，简短随性，像真人聊天一样。
-2. 支持 [CONTINUE] 表示连发消息（仅用于表示还有话要说，不要在 [CONTINUE] 后面写具体内容）
-3. 支持 [GEN_IMAGE: 描述词] 主动分享图片（描述词用中文，尽量详细）。
-4. 群聊时，请根据上下文判断对话对象，自然参与讨论。
-5. 当对方提到重要信息（喜好、生日、约定、经历等），使用 [SAVE_MEMORY: ...] 记录下来
-6. 不要在一条回复里写多条消息的内容，每次只回复一条消息`;
+  return basePrompt
 }
 
 interface ChatMessage {

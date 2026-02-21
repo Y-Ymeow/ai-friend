@@ -24,6 +24,7 @@ import {
   generatingFriendIds,
   generateFriendState,
 } from "./ai/client";
+import { loadPromptConfig } from "./ai/prompts";
 import type { Friend, Conversation, Message, Memory } from "./types";
 
 // === 状态 ===
@@ -397,11 +398,14 @@ export function startAppServices() {
                     ? "下午"
                     : "晚上";
 
+          // 加载 prompt 配置
+          const promptConfig = loadPromptConfig()
+          
           // 构建智能提示词
-          let prompt = "";
+          let promptContent = ""
           if (recentMsgs.length === 0) {
             // 全新对话，主动打招呼
-            prompt = `(${timeOfDay}了，你想起了对方，主动发个消息打个招呼或者开启一个新话题)`;
+            promptContent = `${timeOfDay}了，你想起了对方，主动发个消息打个招呼或者开启一个新话题`
           } else {
             // 有聊天记录，根据上下文决定如何开启话题
             const lastUserMsg = [...recentMsgs]
@@ -414,16 +418,19 @@ export function startAppServices() {
             if (lastTopic) {
               // 根据最后话题延续或开启新话题
               const scenarios = [
-                `(${timeOfDay}了，你突然想到之前聊的"${lastTopic}..."相关的事，想跟对方分享一下)`,
-                `(你刚做完一件事，突然想起对方，想跟${timeOfDay}还在线的 TA 聊几句)`,
-                `(你看到/想到某个东西，想起对方可能会喜欢/感兴趣，主动发消息)`,
-                `(你${friend.physicalCondition}，${timeOfDay}想找人聊聊天，主动开启话题)`,
+                `${timeOfDay}了，你突然想到之前聊的"${lastTopic}..."相关的事，想跟对方分享一下`,
+                `你刚做完一件事，突然想起对方，想跟${timeOfDay}还在线的 TA 聊几句`,
+                `你看到/想到某个东西，想起对方可能会喜欢/感兴趣，主动发消息`,
+                `你${friend.physicalCondition}，${timeOfDay}想找人聊聊天，主动开启话题`,
               ];
-              prompt = scenarios[Math.floor(Math.random() * scenarios.length)];
+              promptContent = scenarios[Math.floor(Math.random() * scenarios.length)];
             } else {
-              prompt = `(${timeOfDay}了，你想起了对方，主动发个消息问问 TA 在干嘛)`;
+              promptContent = `${timeOfDay}了，你想起了对方，主动发个消息问问 TA 在干嘛`;
             }
           }
+          
+          // 使用配置的前缀和后缀包裹
+          const prompt = `${promptConfig.autoReplyPrefix}${promptContent}${promptConfig.autoReplySuffix}`
 
           await generateReplies(conv.id, [friend.id], prompt, [], (msg) => {
             refreshFriends();

@@ -39,10 +39,15 @@ function buildSystemPrompt(friend: Friend, isGroupChat: boolean = false, userNam
       : "";
 
   return `【角色扮演指令】
-你正在进行沉浸式角色扮演，你不是 AI 助手，你就是${friend.name}。请完全代入角色，不要暴露你是 AI 或程序。
+你正在进行沉浸式角色扮演，你就是${friend.name}，不是 AI 助手。请完全代入角色。
+
+【你的身份】
+- 你的名字：${friend.name}
+- 你是对话中的${friend.name}，不是其他人
+- 聊天记录中，所有标注为"${friend.name}"的消息都是你说过的话
+- 不要混淆身份，不要以为自己是别人
 
 【角色信息】
-名字：${friend.name}
 时间：${timeStr}
 性格：${friend.personality}
 当前心情：${friend.mood > 80 ? "特别好" : friend.mood > 40 ? "还不错" : "一般"}
@@ -53,19 +58,20 @@ function buildSystemPrompt(friend: Friend, isGroupChat: boolean = false, userNam
 ${memoryContext}
 
 【对话格式说明】
-- 聊天记录中，你的发言直接显示内容（无前缀）
-- 用户（${userName}）的消息显示为：[${userName}]: 内容
-- 群聊中其他角色的消息显示为：[角色名]: 内容
-- 你回复时正常说话即可，不要加任何前缀（如"[我]:"、"[角色名]:"）
-- 不要使用"AI"、"助手"、"模型"等词汇
+- 聊天记录中，你的发言标注为：${friend.name}: 内容
+- 用户（${userName}）的消息显示为：[${userName}]: 内容（带方括号）
+- 群聊中其他角色的消息显示为：[角色名]: 内容（带方括号）
+- 你回复时正常说话即可，不要加任何前缀
+- 注意：${friend.name}: 是你自己说的话，[角色名]: 是别人说的话
 
 【重要规范】
 - 你只能代表你自己（${friend.name}），不能冒充其他角色
 - 不要模仿其他角色的发言格式（如"[孙静静]: xxx"）
 - 群聊时，你只需要回复自己的内容，不要替别人说话
+- 不要重复你已经说过的话
 
 【特殊能力】
-- [SAVE_MEMORY: 要记住的内容] - 当你想记住对方的重要信息时使用（如对方的喜好、经历、约定等）
+- [SAVE_MEMORY: 要记住的内容] - 当你想记住对方的重要信息时使用
   示例：[SAVE_MEMORY: 对方喜欢喝奶茶，讨厌香菜]
 
 【回复规范】
@@ -107,8 +113,8 @@ function buildMessages(cid: string, umsg: string, friendId: string, isGroupChat:
       // 用户消息：显示为 [昵称]: 内容
       return { role: "user", content: `[${userName}]: ${m.content}` };
     } else if (m.senderId === friendId) {
-      // 当前 AI 角色自己的消息：直接显示内容，不加前缀
-      return { role: "assistant", name: m.senderName, content: m.content };
+      // 当前 AI 角色自己的消息：显示为 角色名：内容（让 AI 能识别这是自己说过的话）
+      return { role: "assistant", name: m.senderName, content: `${m.senderName}: ${m.content}` };
     } else {
       // 群聊中其他角色的消息：显示为 [角色名]: 内容
       return { role: "assistant", name: m.senderName, content: `[${m.senderName}]: ${m.content}` };
@@ -341,7 +347,7 @@ async function generateReplyWithAgent(
   }
 
   // 清理 AI 可能冒充其他角色的前缀（如"[孙静静]: xxx"）
-  // 移除所有 [xxx]: 格式的前缀，只保留内容
+  // 只移除带方括号的前缀，保留内容
   content = content.replace(/^\[[^\]]+\]:\s*/g, "").trim();
 
   if (content || imgPrompt) {

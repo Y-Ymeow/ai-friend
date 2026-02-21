@@ -43,11 +43,22 @@ export function App() {
     }
   }, [currentPage.value, routeParams.value.id])
 
-  const handleAddFriend = useCallback((data: { name: string; personality: string }) => {
+  const handleAddFriend = useCallback((data: { 
+    name: string
+    personality: string
+    gender?: "female" | "male" | "other"
+    height?: number
+    weight?: number
+    age?: number
+  }) => {
     createFriend({
       id: `friend_${Date.now()}`,
       name: data.name,
-      personality: data.personality
+      personality: data.personality,
+      gender: data.gender,
+      height: data.height,
+      weight: data.weight,
+      age: data.age,
     })
     setShowAddFriend(false)
   }, [])

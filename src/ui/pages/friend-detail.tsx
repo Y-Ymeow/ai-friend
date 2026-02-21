@@ -110,6 +110,15 @@ export const FriendDetailPage: FunctionalComponent<Props> = ({ friendId, onBack 
                 心情 {friend.mood}
               </Badge>
             </div>
+            {/* 基本数据 */}
+            <div class="flex gap-4 mt-2 justify-center text-xs text-muted">
+              {friend.gender && (
+                <span>{friend.gender === "female" ? "♀" : friend.gender === "male" ? "♂" : "⚧"}</span>
+              )}
+              {friend.height && <span>{friend.height}cm</span>}
+              {friend.weight && <span>{friend.weight}kg</span>}
+              {friend.age && <span>{friend.age}岁</span>}
+            </div>
           </div>
         </div>
 

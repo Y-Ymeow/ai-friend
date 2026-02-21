@@ -70,6 +70,10 @@ function initSchema(db: Database) {
   // 迁移逻辑：确保列存在
   const columns = ['mood', 'intimacy', 'appearance', 'outfit', 'physical_condition', 'last_state_update', 'auto_reply'];
   columns.forEach(col => { try { db.run(`ALTER TABLE friends ADD COLUMN ${col} TEXT`); } catch(e) {} });
+  
+  // 添加基本数据列
+  const basicColumns = ['gender', 'height', 'weight', 'age', 'birthday'];
+  basicColumns.forEach(col => { try { db.run(`ALTER TABLE friends ADD COLUMN ${col} TEXT`); } catch(e) {} });
   saveDb();
 }
 
@@ -88,7 +92,12 @@ export function getFriends(): Friend[] {
     intimacy: Number(row[5] || 0), appearance: row[6], outfit: row[7], physicalCondition: row[8],
     lastStateUpdate: Number(row[9] || Date.now()),
     autoReply: row[10] ? JSON.parse(row[10]) : { enabled: false, idleMinutes: 10 },
-    createdAt: Number(row[11])
+    createdAt: Number(row[11]),
+    gender: row[12] || undefined,
+    height: row[13] ? Number(row[13]) : undefined,
+    weight: row[14] ? Number(row[14]) : undefined,
+    age: row[15] ? Number(row[15]) : undefined,
+    birthday: row[16] || undefined
   }));
 }
 
@@ -101,7 +110,12 @@ export function getFriend(id: string): Friend | null {
     intimacy: Number(row[5] || 0), appearance: row[6], outfit: row[7], physicalCondition: row[8],
     lastStateUpdate: Number(row[9] || Date.now()),
     autoReply: row[10] ? JSON.parse(row[10]) : { enabled: false, idleMinutes: 10 },
-    createdAt: Number(row[11])
+    createdAt: Number(row[11]),
+    gender: row[12] || undefined,
+    height: row[13] ? Number(row[13]) : undefined,
+    weight: row[14] ? Number(row[14]) : undefined,
+    age: row[15] ? Number(row[15]) : undefined,
+    birthday: row[16] || undefined
   };
 }
 
@@ -109,8 +123,9 @@ export function createFriend(friend: any): void {
   const ts = Date.now();
   const ar = JSON.stringify({ enabled: false, idleMinutes: 10 });
   db!.run(`INSERT INTO friends (${FRIEND_COLS}) VALUES (
-    '${friend.id}', '${friend.name.replace(/'/g, "''")}', '${(friend.avatar || "").replace(/'/g, "''")}', 
-    '${(friend.personality || "").replace(/'/g, "''")}', 50, 0, '初次见面', '休闲装', '精力充沛', ${ts}, '${ar}', ${ts}
+    '${friend.id}', '${friend.name.replace(/'/g, "''")}', '${(friend.avatar || "").replace(/'/g, "''")}',
+    '${(friend.personality || "").replace(/'/g, "''")}', 50, 0, '初次见面', '休闲装', '精力充沛', ${ts}, '${ar}', ${ts},
+    '${friend.gender || ''}', '${friend.height || ''}', '${friend.weight || ''}', '${friend.age || ''}', '${friend.birthday || ''}'
   )`);
   saveDb();
 }
@@ -119,12 +134,14 @@ export function updateFriend(id: string, updates: Partial<Friend>): void {
   const cur = getFriend(id);
   if (!cur) return;
   const f = { ...cur, ...updates };
-  db!.run(`UPDATE friends SET 
-    name='${f.name.replace(/'/g, "''")}', avatar='${(f.avatar || "").replace(/'/g, "''")}', 
-    personality='${f.personality.replace(/'/g, "''")}', mood=${f.mood}, intimacy=${f.intimacy}, 
-    appearance='${f.appearance.replace(/'/g, "''")}', outfit='${f.outfit.replace(/'/g, "''")}', 
-    physical_condition='${f.physicalCondition.replace(/'/g, "''")}', last_state_update=${f.lastStateUpdate}, 
-    auto_reply='${JSON.stringify(f.autoReply).replace(/'/g, "''")}' WHERE id='${id}'`);
+  db!.run(`UPDATE friends SET
+    name='${f.name.replace(/'/g, "''")}', avatar='${(f.avatar || "").replace(/'/g, "''")}',
+    personality='${f.personality.replace(/'/g, "''")}', mood=${f.mood}, intimacy=${f.intimacy},
+    appearance='${f.appearance.replace(/'/g, "''")}', outfit='${f.outfit.replace(/'/g, "''")}',
+    physical_condition='${f.physicalCondition.replace(/'/g, "''")}', last_state_update=${f.lastStateUpdate},
+    auto_reply='${JSON.stringify(f.autoReply).replace(/'/g, "''")}',
+    gender='${f.gender || ''}', height='${f.height || ''}', weight='${f.weight || ''}', age='${f.age || ''}', birthday='${f.birthday || ''}'
+    WHERE id='${id}'`);
   saveDb();
 }
 

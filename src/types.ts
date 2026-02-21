@@ -127,6 +127,12 @@ export interface Friend {
   lastStateUpdate: number;
   autoReply: AutoReplyConfig;
   createdAt: number;
+  // 基本数据
+  gender?: "female" | "male" | "other";
+  height?: number; // cm
+  weight?: number; // kg
+  age?: number;
+  birthday?: string;
 }
 export interface Message {
   id: string;

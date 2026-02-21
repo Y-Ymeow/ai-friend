@@ -377,9 +377,25 @@ export function startAppServices() {
         try {
           // 获取最近的聊天记录来构建上下文
           const recentMsgs = getMessages(conv.id, 10, 0);
+
+          // 如果没有会话或没有消息，跳过
+          if (!conv || recentMsgs.length === 0) {
+            console.log(`[Store] ${friend.name} 没有消息，跳过自动回复`);
+            continue;
+          }
+
           const now = new Date();
           const hour = now.getHours();
-          const timeOfDay = hour < 6 ? "深夜" : hour < 12 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : "晚上";
+          const timeOfDay =
+            hour < 6
+              ? "深夜"
+              : hour < 12
+                ? "早上"
+                : hour < 14
+                  ? "中午"
+                  : hour < 18
+                    ? "下午"
+                    : "晚上";
 
           // 构建智能提示词
           let prompt = "";
@@ -388,40 +404,38 @@ export function startAppServices() {
             prompt = `(${timeOfDay}了，你想起了对方，主动发个消息打个招呼或者开启一个新话题)`;
           } else {
             // 有聊天记录，根据上下文决定如何开启话题
-            const lastUserMsg = [...recentMsgs].reverse().find(m => m.senderId === "user");
-            const lastTopic = lastUserMsg ? lastUserMsg.content.slice(0, 30) : "";
+            const lastUserMsg = [...recentMsgs]
+              .reverse()
+              .find((m) => m.senderId === "user");
+            const lastTopic = lastUserMsg
+              ? lastUserMsg.content.slice(0, 30)
+              : "";
 
             if (lastTopic) {
               // 根据最后话题延续或开启新话题
               const scenarios = [
                 `(${timeOfDay}了，你突然想到之前聊的"${lastTopic}..."相关的事，想跟对方分享一下)`,
-                `(你刚做完一件事，突然想起对方，想跟${timeOfDay}还在线的TA聊几句)`,
+                `(你刚做完一件事，突然想起对方，想跟${timeOfDay}还在线的 TA 聊几句)`,
                 `(你看到/想到某个东西，想起对方可能会喜欢/感兴趣，主动发消息)`,
                 `(你${friend.physicalCondition}，${timeOfDay}想找人聊聊天，主动开启话题)`,
               ];
               prompt = scenarios[Math.floor(Math.random() * scenarios.length)];
             } else {
-              prompt = `(${timeOfDay}了，你想起了对方，主动发个消息问问TA在干嘛)`;
+              prompt = `(${timeOfDay}了，你想起了对方，主动发个消息问问 TA 在干嘛)`;
             }
           }
 
-          await generateReplies(
-            conv.id,
-            [friend.id],
-            prompt,
-            [],
-            (msg) => {
-              refreshFriends();
-              refreshConversations();
-              refreshMessages();
-              if (
-                "Notification" in window &&
-                Notification.permission === "granted"
-              ) {
-                new Notification(`${friend.name}`, { body: msg.content });
-              }
-            },
-          );
+          await generateReplies(conv.id, [friend.id], prompt, [], (msg) => {
+            refreshFriends();
+            refreshConversations();
+            refreshMessages();
+            if (
+              "Notification" in window &&
+              Notification.permission === "granted"
+            ) {
+              new Notification(`${friend.name}`, { body: msg.content });
+            }
+          });
         } catch (err) {
           console.error(`[Store] ${friend.name} 自动回复失败:`, err);
         }

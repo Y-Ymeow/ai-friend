@@ -184,38 +184,6 @@ async function callAI(
       userContent.push({ type: "image_url", image_url: { url: img } });
   }
 
-  // 腾讯混元使用 OpenAI 兼容格式
-  if (provider === "tencent") {
-    const endpoint = baseUrl
-      ? `${baseUrl.replace(/\/$/, "")}/chat/completions`
-      : "https://api.hunyuan.cloud.tencent.com/v1/chat/completions";
-
-    const apiMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages
-        .slice(0, -1)
-        .map((m) => ({ role: m.role, name: m.name, content: m.content })),
-      { role: "user", content: userContent },
-    ];
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: chatModel,
-        messages: apiMessages,
-        temperature: 0.8,
-      }),
-    });
-    if (!response.ok)
-      throw new Error(`腾讯混元 API 错误：${await response.text()}`);
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim() || "";
-  }
-
   const endpoint =
     baseUrl ||
     (provider === "zhipu"
@@ -226,7 +194,9 @@ async function callAI(
           ? "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
           : provider === "modelscope"
             ? "https://api.modelscope.cn/api/v1/chat/completions"
-            : "");
+            : provider === "tencent"
+              ? "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+              : "");
 
   const apiMessages = [
     { role: "system", content: systemPrompt },

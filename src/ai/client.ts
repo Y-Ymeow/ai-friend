@@ -106,8 +106,9 @@ async function callAI(
   systemPrompt: string,
   messages: ChatMessage[],
   images: string[] = [],
+  retryCount = 0,
 ): Promise<string> {
-  const { provider, apiKey, chatModel, baseUrl } = config;
+  const { provider, apiKey, chatModel, baseUrl, maxRetries = 3 } = config;
   const lastMsg = messages[messages.length - 1];
   const modelInfo = CHAT_MODELS[provider].find((m) => m.id === chatModel);
   const supportsVision = modelInfo?.supportsVision ?? false;
@@ -139,6 +140,15 @@ async function callAI(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: apiMessages }),
     });
+    
+    // 处理 429 错误（请求过多）
+    if (response.status === 429 && retryCount < maxRetries) {
+      const waitTime = Math.pow(2, retryCount) * 1000; // 指数退避：1s, 2s, 4s
+      console.log(`[AI] 429 错误，等待 ${waitTime}ms 后重试（第 ${retryCount + 1}/${maxRetries} 次）`);
+      await new Promise(r => setTimeout(r, waitTime));
+      return callAI(config, systemPrompt, messages, images, retryCount + 1);
+    }
+    
     if (!response.ok)
       throw new Error(`Google API 错误：${await response.text()}`);
     const data = await response.json();
@@ -184,6 +194,15 @@ async function callAI(
       temperature: 0.8,
     }),
   });
+  
+  // 处理 429 错误（请求过多）
+  if (response.status === 429 && retryCount < maxRetries) {
+    const waitTime = Math.pow(2, retryCount) * 1000; // 指数退避：1s, 2s, 4s
+    console.log(`[AI] 429 错误，等待 ${waitTime}ms 后重试（第 ${retryCount + 1}/${maxRetries} 次）`);
+    await new Promise(r => setTimeout(r, waitTime));
+    return callAI(config, systemPrompt, messages, images, retryCount + 1);
+  }
+  
   if (!response.ok)
     throw new Error(`${provider} API 错误：${await response.text()}`);
   const data = await response.json();

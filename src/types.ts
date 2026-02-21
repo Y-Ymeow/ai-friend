@@ -17,6 +17,8 @@ export interface AIProviderConfig {
   imageSize?: string;
   // 自定义模型配置（每个提供商都可以有自己的自定义模型）
   customModels?: CustomModel[];
+  // 429 错误重试配置
+  maxRetries?: number; // 最大重试次数，默认 3 次
 }
 
 export interface CustomModel {

@@ -437,6 +437,19 @@ export const SettingsPage: FunctionalComponent<Props> = ({ onBack, onReset }) =>
                         placeholder="默认使用官方 API 地址"
                       />
                     </div>
+                    <div>
+                      <label class="block font-medium mb-1 text-xs">最大重试次数 (429 错误)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={currentChat.maxRetries ?? 3}
+                        onInput={e => updateProviderConfig(activeProvider, { maxRetries: Number((e.target as HTMLInputElement).value) })}
+                        class="w-full px-3 py-2 rounded-lg border border-border bg-surface focus:ring-1 focus:ring-accent"
+                        placeholder="3"
+                      />
+                      <p class="text-xs text-muted mt-1">遇到 429 错误时的最大重试次数，默认 3 次，使用指数退避策略</p>
+                    </div>
                   </>
                 )}
                 

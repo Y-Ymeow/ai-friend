@@ -10,13 +10,6 @@ interface Props { onBack: () => void; onReset: () => void }
 
 type SettingsTab = 'basic' | 'models' | 'prompts' | 'data'
 
-const DEFAULT_PROMPTS = {
-  systemPrefix: "【角色扮演指令】\n你正在进行沉浸式角色扮演，",
-  systemSuffix: "\n\n【回复规范】\n1. 真人社交语境回复，简短随性，像真人聊天一样。\n2. 支持 [CONTINUE] 表示连发消息。\n3. 支持 [GEN_IMAGE: 描述词] 主动分享图片（描述词用中文，尽量详细）。",
-  autoReplyPrefix: "(",
-  autoReplySuffix: ")",
-}
-
 // 自定义 Provider 类型
 interface CustomProvider {
   id: string
